@@ -1,13 +1,12 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
 
 # Expo
 .expo/
 dist/
 web-build/
-expo-env.d.ts
 
 # Native
 *.orig.*
@@ -31,8 +30,51 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+.env.development
+.env.test
+.env.production
 
 # typescript
 *.tsbuildinfo
 
-app-example
+# IDE specific files
+.idea
+.vscode
+*.swp
+*.swo
+
+# Temporary files
+*.log
+*.log.*
+logs/
+tmp/
+temp/
+
+# Testing
+coverage/
+
+# Build
+build/
+*.apk
+*.aab
+*.ipa
+
+# Expo specific
+.expo-shared/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Local Netlify folder
+.netlify
+
+# Bundle artifact
+*.bundle
+*.jsbundle
