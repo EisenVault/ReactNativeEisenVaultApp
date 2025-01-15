@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/android/mipmap-hdpi/ic_launcher_foreground.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -16,13 +16,16 @@
       "assets/**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.ReactNativeEisenVaultApp",
+      "icon": "./assets/ios/AppIcon.appiconset/iTunesArtwork@2x.png"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      }
+        "foregroundImage": "./assets/android/mipmap-hdpi/ic_launcher_foreground.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.anonymous.ReactNativeEisenVaultApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
