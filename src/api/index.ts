@@ -12,10 +12,6 @@
  */
 export * from './types';
 
-/**
- * Re-export configuration types
- */
-export * from './config';
 
 /**
  * Re-export the factory for creating providers
@@ -26,7 +22,7 @@ export * from './factory';
  * Re-export individual providers
  * Note: Usually, you should use the factory instead of instantiating these directly
  */
-export * from './providers/alfresco';
+export * from './providers/alfresco/AlfrescoProvider';
 export * from './providers/angora';
 
 /**

@@ -1,7 +1,7 @@
 // src/api/providers/angora.ts
 
 import { DMSProvider, AuthResponse, Document, Folder, SearchResult } from '../types';
-import { ApiConfig } from '../config';
+import { ApiConfig } from '../ApiConfig';
 
 /**
  * Implementation of the DMSProvider interface for Angora DMS

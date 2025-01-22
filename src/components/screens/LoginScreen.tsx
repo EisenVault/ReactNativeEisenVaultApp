@@ -24,6 +24,8 @@ import {
 } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DMSFactory, ApiConfig } from '../../api';
+import { useDispatch } from 'react-redux';
+import { setUserProfile } from '../../store/slices/authSlice';
 
 // Get screen dimensions for responsive design
 const windowWidth = Dimensions.get('window').width;
@@ -54,6 +56,7 @@ const ErrorDialog: React.FC<ErrorDialogProps> = ({ visible, title, message, onDi
 );
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
+    const dispatch = useDispatch();
     const [serverUrl, setServerUrl] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -203,8 +206,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 timeout: 30000,
             };
 
+    
             const provider = DMSFactory.createProvider('alfresco', config);
-            await provider.login(username, password);
+            const authResponse = await provider.login(username, password);
+            
+            // Dispatch user profile to store
+            dispatch(setUserProfile(authResponse.user));
             
             onLoginSuccess();
         } catch (error) {

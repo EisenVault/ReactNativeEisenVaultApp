@@ -1,8 +1,7 @@
 // src/api/factory.ts
 
-import { DMSProvider } from './types';
-import { ApiConfig } from './config';
-import { AlfrescoProvider } from './providers/alfresco';
+import { DMSProvider, ApiConfig } from './types';
+import { AlfrescoProvider } from './providers/alfresco/AlfrescoProvider';
 import { AngoraProvider } from './providers/angora';
 
 /**

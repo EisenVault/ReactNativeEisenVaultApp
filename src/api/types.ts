@@ -1,139 +1,160 @@
 // src/api/types.ts
 
 /**
- * Main interface that all DMS (Document Management System) providers must implement.
- * This ensures consistency across different DMS backends (Alfresco, Angora, etc.)
+ * Represents the complete user profile information.
+ * Used for displaying user details and personalizing the interface.
+ */
+export interface UserProfile {
+  id: string;           // Unique identifier for the user
+  firstName: string;    // User's first name
+  lastName: string;     // User's last name
+  displayName: string;  // Full display name
+  email: string;       // User's email address
+  username: string;    // Login username
+}
+
+/**
+ * Authentication response structure.
+ * Contains both the authentication token and user information.
+ * Returned after successful login operations.
+ */
+export interface AuthResponse {
+  token: string;      // JWT or session token for subsequent requests
+  user: UserProfile;  // User profile information
+}
+
+/**
+ * Document metadata structure.
+ * Represents a document in the Document Management System (DMS).
+ * Contains all essential information about a stored document.
+ */
+export interface Document {
+  id: string;                 // Unique identifier for the document
+  name: string;              // File name with extension
+  path: string;              // Full hierarchical path to the document in the DMS
+  mimeType: string;          // MIME type (e.g., 'application/pdf', 'image/jpeg')
+  size: number;              // File size in bytes
+  lastModified: string;      // ISO 8601 timestamp of last modification
+  createdBy: string;         // Username or ID of document creator
+  modifiedBy: string;        // Username or ID of last modifier
+  isOfflineAvailable: boolean; // Indicates if document is cached for offline access
+}
+
+/**
+ * Folder structure.
+ * Represents a folder/directory in the DMS hierarchy.
+ * Used for organizing documents and managing the file structure.
+ */
+export interface Folder {
+  id: string;         // Unique identifier for the folder
+  name: string;       // Display name of the folder
+  path: string;       // Full hierarchical path to the folder
+  parentId: string | null;  // ID of the parent folder (null indicates root folder)
+  createdBy: string;  // Username or ID of folder creator
+  modifiedBy: string; // Username or ID of last modifier
+}
+
+/**
+ * Search results structure.
+ * Contains combined search results for both documents and folders.
+ * Used when performing global or scoped searches in the DMS.
+ */
+export interface SearchResult {
+  documents: Document[];  // Array of matching document metadata
+  folders: Folder[];     // Array of matching folder metadata
+  totalItems: number;    // Total count of all matches (for pagination)
+}
+
+/**
+ * API Configuration interface.
+ * Used to configure the DMS provider with necessary connection parameters.
+ * Essential for initializing the DMS client.
+ */
+export interface ApiConfig {
+  baseUrl: string;    // Root URL of the DMS API endpoint
+  timeout: number;    // Request timeout duration in milliseconds
+  /**
+   * Optional additional headers to include in all requests
+   * Example: { 'X-Custom-Header': 'value', 'Authorization': 'Bearer token' }
+   */
+  headers?: Record<string, string>;
+}
+
+/**
+ * Main DMS Provider interface.
+ * Defines the contract that any DMS provider implementation must fulfill.
+ * Includes all core operations for document and folder management.
  */
 export interface DMSProvider {
-  /**
-   * Authenticates a user with the DMS
-   * @param username - The user's username/email
-   * @param password - The user's password
-   * @returns Promise containing auth token and user information
-   */
+  // Authentication methods
   login(username: string, password: string): Promise<AuthResponse>;
-  
-  /**
-   * Logs out the current user and invalidates their token
-   */
   logout(): Promise<void>;
   
   // Document Operations
-  /**
-   * Retrieves all documents in a specified folder
-   * @param folderId - ID of the folder to list documents from
-   * @returns Array of Document objects
-   */
   getDocuments(folderId: string): Promise<Document[]>;
-  
-  /**
-   * Retrieves a single document's metadata
-   * @param documentId - ID of the document to retrieve
-   * @returns Document object with metadata
-   */
   getDocument(documentId: string): Promise<Document>;
-  
-  /**
-   * Uploads a new document to a specified folder
-   * @param folderId - Destination folder ID
-   * @param file - File object to upload
-   * @returns Metadata of the uploaded document
-   */
   uploadDocument(folderId: string, file: File): Promise<Document>;
-  
-  /**
-   * Deletes a document from the DMS
-   * @param documentId - ID of the document to delete
-   */
   deleteDocument(documentId: string): Promise<void>;
-  
-  /**
-   * Downloads a document's content
-   * @param documentId - ID of the document to download
-   * @returns Blob containing the document's content
-   */
   downloadDocument(documentId: string): Promise<Blob>;
   
   // Folder Operations
-  /**
-   * Lists all folders within a parent folder
-   * @param parentFolderId - ID of the parent folder
-   * @returns Array of Folder objects
-   */
   getFolders(parentFolderId: string): Promise<Folder[]>;
-  
-  /**
-   * Creates a new folder
-   * @param parentFolderId - ID of the parent folder
-   * @param name - Name for the new folder
-   * @returns Metadata of the created folder
-   */
   createFolder(parentFolderId: string, name: string): Promise<Folder>;
-  
-  /**
-   * Deletes a folder and its contents
-   * @param folderId - ID of the folder to delete
-   */
   deleteFolder(folderId: string): Promise<void>;
   
-  /**
-   * Searches across the DMS
-   * @param query - Search query string
-   * @returns Combined results of documents and folders
-   */
+  // Search Operations
   search(query: string): Promise<SearchResult>;
 }
 
 /**
- * Response structure for successful authentication
+ * Search parameters interface.
+ * Defines the structure for advanced search operations.
+ * Supports pagination, filtering, and faceted search.
  */
-export interface AuthResponse {
-  token: string;      // Authentication token to be used in subsequent requests
-  user: UserInfo;     // Information about the authenticated user
+export interface SearchParams {
+  maxItems: number;      // Maximum number of items to return per page
+  skipCount: number;     // Number of items to skip (for pagination)
+  include: string[];     // Array of fields to include in the response
+  sort?: SearchSortItem[]; // Optional sorting criteria
+  filters?: Record<string, string | string[]>; // Optional search filters
+  facetFields?: string[]; // Fields to generate facets for
 }
 
 /**
- * Structure containing user information
+ * Search sort configuration.
+ * Defines how search results should be ordered.
  */
-export interface UserInfo {
-  id: string;         // Unique identifier for the user
-  username: string;   // Username used for login
-  displayName: string;// User's display name
-  email: string;      // User's email address
+export interface SearchSortItem {
+  field: string;     // Field name to sort by
+  ascending: boolean; // Sort direction (true for ascending, false for descending)
 }
 
 /**
- * Structure representing a document in the DMS
+ * Folder listing response.
+ * Wrapper for folder list operations that return multiple folders.
  */
-export interface Document {
-  id: string;                 // Unique identifier for the document
-  name: string;               // File name
-  path: string;               // Full path to the document
-  mimeType: string;           // MIME type (e.g., 'application/pdf')
-  size: number;               // File size in bytes
-  lastModified: string;       // Last modification date/time
-  createdBy: string;          // User who created the document
-  modifiedBy: string;         // User who last modified the document
-  isOfflineAvailable: boolean;// Whether the document is cached for offline use
+export interface FolderListResponse {
+  list: {
+    entries: Array<{ entry: Folder }>; // Array of folder entries with metadata
+  };
 }
 
 /**
- * Structure representing a folder in the DMS
+ * Single folder response.
+ * Wrapper for operations that return a single folder.
  */
-export interface Folder {
-  id: string;         // Unique identifier for the folder
-  name: string;       // Folder name
-  path: string;       // Full path to the folder
-  parentId: string | null;  // ID of the parent folder (null for root)
-  createdBy: string;  // User who created the folder
-  modifiedBy: string; // User who last modified the folder
+export interface FolderResponse {
+  entry: Folder; // Single folder entry with metadata
 }
 
 /**
- * Structure for search results, combining both documents and folders
+ * Upload operation response.
+ * Contains metadata about the newly uploaded file or folder.
  */
-export interface SearchResult {
-  documents: Document[];  // Array of matching documents
-  folders: Folder[];     // Array of matching folders
-  totalItems: number;    // Total number of matches
+export interface UploadResponse {
+  id: string;        // Unique identifier of the uploaded item
+  name: string;      // Name of the uploaded item
+  size?: number;     // Size of the uploaded file in bytes (if applicable)
+  type: string;      // Type of the uploaded item ('file' or 'folder')
+  createdAt: string; // ISO 8601 timestamp of creation
 }
