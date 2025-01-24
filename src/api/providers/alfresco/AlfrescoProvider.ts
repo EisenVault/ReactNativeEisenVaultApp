@@ -39,7 +39,9 @@ export class AlfrescoProvider implements DMSProvider {
         this.folderService = new FolderService(config.baseUrl, this.apiUtils);
         this.searchService = new SearchService(config.baseUrl, this.apiUtils);
     }
-
+    setToken(token: string | null): void {
+        this.apiUtils.setToken(token);
+    }
     /**
      * Authenticates user with Alfresco
      * @param username - User's username

@@ -6,11 +6,12 @@ import {
     View, 
     KeyboardAvoidingView, 
     Platform, 
-    Alert,
-    Linking,
-    Image,
     Animated,
-    Dimensions
+    Dimensions,
+    Image,
+    TextStyle,
+    ViewStyle,
+    ImageStyle
 } from 'react-native';
 import { 
     TextInput, 
@@ -25,21 +26,36 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DMSFactory, ApiConfig } from '../../api';
 import { useDispatch } from 'react-redux';
-import { setUserProfile } from '../../store/slices/authSlice';
+import { setUserProfile, setServerUrl, setAuthToken } from '../../store/slices/authSlice';
+import { AuthResponse } from '../../api';
+import theme from '../../theme/theme';
 
-// Get screen dimensions for responsive design
 const windowWidth = Dimensions.get('window').width;
 
 interface LoginScreenProps {
     onLoginSuccess: () => void;
 }
-
+interface Styles {
+    container: ViewStyle;
+    keyboardAvoid: ViewStyle;
+    loginContainer: ViewStyle;
+    logoContainer: ViewStyle;
+    logo: ImageStyle;
+    title: TextStyle;
+    subtitle: TextStyle;
+    input: ViewStyle;
+    button: ViewStyle;
+    buttonContent: ViewStyle;
+    errorTitle: TextStyle;
+    errorMessage: TextStyle;
+}
 interface ErrorDialogProps {
     visible: boolean;
     title: string;
     message: string;
     onDismiss: () => void;
 }
+
 
 const ErrorDialog: React.FC<ErrorDialogProps> = ({ visible, title, message, onDismiss }) => (
     <Portal>
@@ -57,7 +73,8 @@ const ErrorDialog: React.FC<ErrorDialogProps> = ({ visible, title, message, onDi
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     const dispatch = useDispatch();
-    const [serverUrl, setServerUrl] = useState('');
+    
+    const [localServerUrl, setLocalServerUrl] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -78,7 +95,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     }, [logoLoaded]);
 
     const showError = (title: string, message: string) => {
-        console.log('Showing error:', { title, message });
         setErrorMessage({ title, message });
         setErrorDialogVisible(true);
     };
@@ -101,18 +117,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
     const testConnection = async (url: string): Promise<boolean> => {
         try {
-            console.log('Testing connection to:', url);
-            
-            // For native platforms, we'll skip the pre-flight check
             if (Platform.OS !== 'web') {
-                console.log('Skipping connection test on native platform');
                 return true;
             }
 
             const response = await fetch(`${url}/api/-default-/public/alfresco/versions/1`);
-            console.log('Connection test response status:', response.status);
             
-            // 401 is a valid response for Alfresco
             if (response.status === 401) {
                 return true;
             }
@@ -121,34 +131,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 throw new Error(`Server responded with status: ${response.status}`);
             }
 
-            const contentType = response.headers.get('content-type');
-            if (!contentType?.includes('application/json')) {
-                throw new Error('Invalid server response type');
-            }
-
             return true;
         } catch (error) {
-            console.error('Connection test error:', error);
-            
-            // For native platforms, be more permissive
             if (Platform.OS !== 'web') {
-                console.log('Proceeding despite connection test error on native platform');
                 return true;
             }
             
             if (error instanceof Error) {
-                if (error.message.includes('Failed to fetch')) {
-                    showError('Connection Failed', 
-                        'Unable to connect to the server. Please check:\n\n' +
-                        '• The server URL is correct\n' +
-                        '• Your internet connection is working\n' +
-                        '• The server is accessible'
-                    );
-                } else {
-                    showError('Server Error', 
-                        'Unable to verify Alfresco server. Please check if the URL is correct.'
-                    );
-                }
+                const errorMessage = error.message.includes('Failed to fetch')
+                    ? 'Unable to connect to the server. Please check:\n\n' +
+                      '• The server URL is correct\n' +
+                      '• Your internet connection is working\n' +
+                      '• The server is accessible'
+                    : 'Unable to verify Alfresco server. Please check if the URL is correct.';
+                
+                showError('Connection Failed', errorMessage);
             }
             return false;
         }
@@ -172,58 +169,44 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
     const handleLogin = async () => {
         try {
-            if (!serverUrl.trim()) {
-                showError('Missing Information', 'Please enter a server URL');
+            if (!localServerUrl.trim() || !username.trim() || !password.trim()) {
+                showError('Missing Information', 'Please fill in all fields');
                 return;
             }
-            if (!username.trim()) {
-                showError('Missing Information', 'Please enter a username');
-                return;
-            }
-            if (!password.trim()) {
-                showError('Missing Information', 'Please enter a password');
-                return;
-            }
-
+    
             setIsLoading(true);
-
-            const formattedUrl = formatServerUrl(serverUrl);
-            console.log('Formatted URL:', formattedUrl);
-            
+    
+            const formattedUrl = formatServerUrl(localServerUrl);
             if (!validateUrl(formattedUrl)) {
                 return;
             }
-
-            console.log('Testing connection...');
+    
             const isConnected = await testConnection(formattedUrl);
             if (!isConnected) {
                 return;
             }
-
-            console.log('Attempting login...');
+    
+            localStorage.setItem('serverUrl', formattedUrl);
+            dispatch(setServerUrl(formattedUrl));
+    
             const config: ApiConfig = {
                 baseUrl: formattedUrl,
                 timeout: 30000,
             };
-
     
             const provider = DMSFactory.createProvider('alfresco', config);
             const authResponse = await provider.login(username, password);
-            
-            // Dispatch user profile to store
+    
+            dispatch(setAuthToken(authResponse.token));
             dispatch(setUserProfile(authResponse.user));
-            
+            dispatch(setServerUrl(formattedUrl));
+    
             onLoginSuccess();
         } catch (error) {
-            console.error('Login error details:', error);
-            
             let title = 'Login Failed';
             let message = 'An unexpected error occurred. Please try again.';
             
             if (error instanceof Error) {
-                console.error('Error name:', error.name);
-                console.error('Error message:', error.message);
-                
                 if (error.message.includes('401') || 
                     error.message.includes('Authentication failed') || 
                     error.message.includes('Unauthorized')) {
@@ -260,10 +243,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                             style={styles.logo}
                             resizeMode="contain"
                             onLoad={() => setLogoLoaded(true)}
-                            onError={(error) => {
-                                console.error('Logo loading error:', error);
-                                setLogoLoaded(true);
-                            }}
+                            onError={() => setLogoLoaded(true)}
                         />
                     </Animated.View>
 
@@ -273,8 +253,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     <TextInput
                         mode="outlined"
                         label="Server URL"
-                        value={serverUrl}
-                        onChangeText={setServerUrl}
+                        value={localServerUrl}
+                        onChangeText={setLocalServerUrl}
                         autoCapitalize="none"
                         keyboardType="url"
                         autoCorrect={false}
@@ -318,7 +298,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                         contentStyle={styles.buttonContent}
                     >
                         {isLoading ? (
-                            <ActivityIndicator color="white" />
+                            <ActivityIndicator color={theme.colors.textInverted} />
                         ) : (
                             'Login'
                         )}
@@ -339,74 +319,71 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
+        backgroundColor: theme.colors.surfaceBackground,
+    } as ViewStyle,
     keyboardAvoid: {
         flex: 1,
         justifyContent: 'center',
-        padding: 20,
-    },
+        padding: theme.spacing.xl,
+    } as ViewStyle,
     loginContainer: {
-        padding: 20,
-        borderRadius: 10,
-        elevation: 4,
-        backgroundColor: 'white',
-        ...Platform.select({
-            ios: {
-                shadowColor: '#000',
-                shadowOffset: {
-                    width: 0,
-                    height: 2,
-                },
-                shadowOpacity: 0.25,
-                shadowRadius: 3.84,
-            },
-            android: {
-                elevation: 5,
-            },
+        padding: theme.spacing.xl,
+        borderRadius: theme.spacing.base,
+        backgroundColor: theme.colors.background,
+        ...(Platform.OS === 'ios' ? {
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+        } : {
+            elevation: 5,
         }),
-    },
+    } as ViewStyle,
     logoContainer: {
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: theme.spacing.xl,
         width: '100%',
-        paddingHorizontal: 20,
-    },
+        paddingHorizontal: theme.spacing.xl,
+    } as ViewStyle,
     logo: {
-        width: '100%',
-        maxWidth: Math.min(200, windowWidth * 0.6),
+        width: windowWidth * 0.6,
+        maxWidth: 200,
         height: 60,
-        marginBottom: 20,
-    },
+        marginBottom: theme.spacing.lg,
+    } as ImageStyle,
     title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 8,
+        fontSize: theme.typography.sizes['2xl'],
+        fontWeight: '700',
+        marginBottom: theme.spacing.sm,
         textAlign: 'center',
-    },
+        color: theme.colors.textPrimary,
+    } as TextStyle,
     subtitle: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 24,
+        fontSize: theme.typography.sizes.base,
+        color: theme.colors.textSecondary,
+        marginBottom: theme.spacing.xl,
         textAlign: 'center',
-    },
+    } as TextStyle,
     input: {
-        marginBottom: 16,
-    },
+        marginBottom: theme.spacing.base,
+        backgroundColor: theme.colors.background,
+    } as ViewStyle,
     button: {
-        marginTop: 8,
-        paddingVertical: 8,
-    },
+        marginTop: theme.spacing.sm,
+        backgroundColor: theme.colors.primary,
+    } as ViewStyle,
     buttonContent: {
-        height: 40,
-    },
+        height: 48,
+    } as ViewStyle,
     errorTitle: {
-        color: '#d32f2f',
-        fontWeight: 'bold',
-    },
+        color: theme.colors.error,
+        fontWeight: '600',
+    } as TextStyle,
     errorMessage: {
-        color: '#333',
-        fontSize: 16,
+        color: theme.colors.textPrimary,
+        fontSize: theme.typography.sizes.base,
         lineHeight: 24,
-    },
+    } as TextStyle,
 });
+
+export default LoginScreen;

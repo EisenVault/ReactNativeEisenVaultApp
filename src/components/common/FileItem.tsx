@@ -1,54 +1,111 @@
-// Reusable component for displaying a file item
+// src/components/common/FileItem.tsx
+
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, TextStyle, ViewStyle, Platform } from 'react-native';
+import { FileText } from 'lucide-react-native';
 import { Document } from '../../api/types';
+import theme from '../../theme/theme';
 
 interface FileItemProps {
   file: Document;
+  onPress: () => void;
 }
 
-const FileItem: React.FC<FileItemProps> = ({ file }) => {
-  // Helper function to format file size (implement this)
-  const formatFileSize = (size: number) => {
-    if (size < 1024) return `${size} B`;
-    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+interface Styles {
+  container: ViewStyle;
+  iconContainer: ViewStyle;
+  content: ViewStyle;
+  name: TextStyle;
+  details: TextStyle;
+}
+
+const FileItem: React.FC<FileItemProps> = ({ file, onPress }) => {
+  const formatFileSize = (size: number): string => {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let value = size;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex++;
+    }
+
+    return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
   };
 
-  // Helper function to format date (implement this)
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString();
+  const formatDate = (date: string): string => {
+    return new Date(date).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const getIconColor = (mimeType: string): string => {
+    if (mimeType.startsWith('image/')) return theme.colors.accent;
+    if (mimeType.includes('pdf')) return theme.colors.error;
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return theme.colors.success;
+    return theme.colors.secondary;
   };
 
   return (
-    <TouchableOpacity style={styles.container}>
+    <TouchableOpacity 
+      style={styles.container} 
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.iconContainer}>
+        <FileText 
+          size={24} 
+          color={getIconColor(file.mimeType)}
+        />
+      </View>
       <View style={styles.content}>
-        <Text style={styles.name}>{file.name}</Text>
+        <Text style={styles.name} numberOfLines={1}>{file.name}</Text>
         <Text style={styles.details}>
-          {formatFileSize(file.size)} • {formatDate(file.lastModified)}
+          {formatFileSize(file.size)} • Modified {formatDate(file.lastModified)}
         </Text>
       </View>
     </TouchableOpacity>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<Styles>({
   container: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    flexDirection: 'row',
+    padding: theme.spacing.base,
+    backgroundColor: theme.colors.cardBackground,
+    borderRadius: 8,
+    marginBottom: theme.spacing.sm,
+    ...(Platform.OS === 'ios' ? {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.2,
+      shadowRadius: 1.41,
+    } : {
+      elevation: 2,
+    }),
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: theme.spacing.base,
   },
   content: {
-    flexDirection: 'column',
+    flex: 1,
+    justifyContent: 'center',
   },
   name: {
-    fontSize: 16,
+    fontSize: theme.typography.sizes.base,
     fontWeight: '500',
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xs,
   },
   details: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
+    fontSize: theme.typography.sizes.sm,
+    color: theme.colors.textSecondary,
   },
 });
 

@@ -1,6 +1,6 @@
 // src/api/providers/alfresco/utils/MapperUtils.ts
 
-import { Document, Folder, UserProfile } from '../types';
+import { Document, Folder, UserProfile } from '../../../types';
 
 /**
  * Utility class for mapping Alfresco API responses to our application types
@@ -27,21 +27,7 @@ export class MapperUtils {
                 lastModified: entry.modifiedAt,
                 createdBy: this.getDisplayName(entry.createdByUser),
                 modifiedBy: this.getDisplayName(entry.modifiedByUser),
-                isOfflineAvailable: false,
-                // Additional metadata
-                properties: {
-                    title: entry.properties?.['cm:title'] || '',
-                    description: entry.properties?.['cm:description'] || '',
-                    author: entry.properties?.['cm:author'] || '',
-                    // Map any custom properties
-                    ...this.mapCustomProperties(entry.properties)
-                },
-                // Permission flags
-                permissions: {
-                    canEdit: (entry.allowableOperations || []).includes('update'),
-                    canDelete: (entry.allowableOperations || []).includes('delete'),
-                    canDownload: (entry.allowableOperations || []).includes('download')
-                }
+                isOfflineAvailable: false
             };
         } catch (error: unknown) {  // Type the error as 'unknown'
             // Check if the error is an instance of Error before accessing its properties
@@ -74,20 +60,7 @@ export class MapperUtils {
                 path: entry.path?.name || '',
                 parentId: entry.parentId,
                 createdBy: this.getDisplayName(entry.createdByUser),
-                modifiedBy: this.getDisplayName(entry.modifiedByUser),
-                // Additional metadata
-                properties: {
-                    title: entry.properties?.['cm:title'] || '',
-                    description: entry.properties?.['cm:description'] || '',
-                    // Map any custom properties
-                    ...this.mapCustomProperties(entry.properties)
-                },
-                // Permission flags
-                permissions: {
-                    canEdit: (entry.allowableOperations || []).includes('update'),
-                    canDelete: (entry.allowableOperations || []).includes('delete'),
-                    canCreateChildren: (entry.allowableOperations || []).includes('create')
-                }
+                modifiedBy: this.getDisplayName(entry.modifiedByUser)
             };
         } catch (error: unknown) {  // Type the error as 'unknown'
             // Check if the error is an instance of Error before accessing its properties
@@ -120,15 +93,7 @@ export class MapperUtils {
                 lastName: entry.lastName || '',
                 displayName: entry.displayName || `${entry.firstName} ${entry.lastName}`.trim(),
                 email: entry.email || '',
-                username: entry.id,
-                // Additional user properties
-                properties: {
-                    jobTitle: entry.jobTitle || '',
-                    organization: entry.organization || '',
-                    location: entry.location || '',
-                    // Map any custom properties
-                    ...this.mapCustomProperties(entry.properties)
-                }
+                username: entry.id
             };
         } catch (error: unknown) {  // Type the error as 'unknown'
             // Check if the error is an instance of Error before accessing its properties

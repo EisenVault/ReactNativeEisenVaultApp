@@ -89,6 +89,7 @@ export interface DMSProvider {
   // Authentication methods
   login(username: string, password: string): Promise<AuthResponse>;
   logout(): Promise<void>;
+  setToken(token: string | null): void;
   
   // Document Operations
   getDocuments(folderId: string): Promise<Document[]>;
