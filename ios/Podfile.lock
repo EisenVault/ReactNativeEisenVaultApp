@@ -3,7 +3,7 @@ PODS:
   - DoubleConversion (1.1.6)
   - EXConstants (17.0.4):
     - ExpoModulesCore
-  - Expo (52.0.25):
+  - Expo (52.0.27):
     - ExpoModulesCore
   - ExpoAsset (11.0.2):
     - ExpoModulesCore
@@ -21,7 +21,7 @@ PODS:
     - ExpoModulesCore
   - ExpoLinking (7.0.4):
     - ExpoModulesCore
-  - ExpoModulesCore (2.1.3):
+  - ExpoModulesCore (2.1.4):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -44,7 +44,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - ExpoSplashScreen (0.29.20):
+  - ExpoSplashScreen (0.29.21):
     - ExpoModulesCore
   - ExpoSymbols (0.2.1):
     - ExpoModulesCore
@@ -1985,7 +1985,7 @@ SPEC CHECKSUMS:
   boost: 1dca942403ed9342f98334bf4c3621f011aa7946
   DoubleConversion: f16ae600a246532c4020132d54af21d0ddb2a385
   EXConstants: cc788e18fb962b77999c16f6b90e551542b1bcf4
-  Expo: 377cc60ce8c9030cf52e36987ab3ce099ab9006e
+  Expo: 7021c4880d0bbd02781e88e213b6786c1200ebdf
   ExpoAsset: 6cc988c426b5fc997859cc0f8f6728d1376bf53f
   ExpoBlur: 5327b09a58e04e4066dd95fe994d8ef5539a1f26
   ExpoDocumentPicker: 2dcad7f93b938922cd6ebee90e9f36048b45ef82
@@ -1994,8 +1994,8 @@ SPEC CHECKSUMS:
   ExpoHaptics: e01cce0741d68c281853118eb0267f88d42c6b7a
   ExpoKeepAwake: 1f74cdf53ab3b3aeb7110f18eb053c92e7c3e710
   ExpoLinking: a9e64f08d2bb4fc42e7441174f15cc535bb390ba
-  ExpoModulesCore: 8d6f5e6ce2bddc1240777d3e338686cd67ccfd45
-  ExpoSplashScreen: c2d80654bda344a827685bb27cb5920512730306
+  ExpoModulesCore: 52b2f1c87f218a8a6ad2b0cb9d3d238bce3529fb
+  ExpoSplashScreen: 83f585abeb0506103f9309628634dbbcd9bc5573
   ExpoSymbols: 54fa089478e1bc00f4d1d66ffb5c8bc64dc71ada
   ExpoSystemUI: 7296f92af7c30ec0fc4305bbeb5c396d7fc9e86c
   ExpoWebBrowser: 6890a769e6c9d83da938dceb9a03e764afc3ec9c

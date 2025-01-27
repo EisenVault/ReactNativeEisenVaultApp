@@ -5,113 +5,172 @@ import { BaseService } from './BaseService';
 import { ApiUtils } from '../utils/ApiUtils';
 import { AuthResponse, UserProfile } from '../../../types';
 
+// Configuration constants
+const CONFIG = {
+    TIMEOUT: 30000,
+    MAX_RETRIES: 3,
+    RETRY_DELAY: 2000,
+    LOG_PREFIX: '[AuthService]'
+};
+
+// Type definitions for API responses
+interface TicketResponse {
+    entry: {
+        id: string;
+    };
+}
+
+interface ProfileResponse {
+    entry: {
+        id: string;
+        firstName?: string;
+        lastName?: string;
+        displayName?: string;
+        email?: string;
+    };
+}
+
+interface RequestHeaders {
+    'Accept': string;
+    'Content-Type': string;
+    'Authorization'?: string;
+}
+
 export class AuthService extends BaseService {
     constructor(baseUrl: string, apiUtils: ApiUtils) {
         super(baseUrl, apiUtils);
     }
 
-    async login(username: string, password: string): Promise<AuthResponse> {
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    private log = {
+        info: (message: string, data?: any) => console.log(`${CONFIG.LOG_PREFIX} ${message}`, data || ''),
+        error: (message: string, error?: any) => console.error(`${CONFIG.LOG_PREFIX} ${message}`, error || ''),
+        debug: (message: string, data?: any) => console.debug(`${CONFIG.LOG_PREFIX} ${message}`, data || '')
+    };
+
+    /**
+     * Protected request handler that adds necessary headers and timeout
+     */
+    protected async makeCustomRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
+        // Debug log for iOS requests
+        if (Platform.OS === 'ios') {
+            this.log.debug('Making iOS request:', {
+                url,
+                method: options.method || 'GET',
+                hasToken: !!this.apiUtils.getToken()
+            });
+        }
+
         try {
-            this.logOperation('login attempt', { username });
+            this.log.debug("Inside makeCustomRequest ... token from apiUtils: ", this.apiUtils.getToken());
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+                this.log.debug('Request timed out');
+            }, CONFIG.TIMEOUT);
 
-            // Create basic auth token
-            const base64Credentials = btoa(`${username}:${password}`);
-            const basicAuthToken = `Basic ${base64Credentials}`;
-            
-            // Set the token in ApiUtils
-            this.apiUtils.setToken(basicAuthToken);
-
-            if (Platform.OS !== 'web') {
-                // For mobile platforms, use the tickets endpoint with JSON body
-                const loginUrl = this.buildUrl('api/-default-/public/authentication/versions/1/tickets');
-                
-                const response = await this.apiUtils.fetch(
-                    loginUrl,
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            userId: username,
-                            password: password
-                        })
-                    }
-                );
-
-                const ticketData = await this.handleResponse<{ entry: { id: string } }>(response);
-                const ticket = ticketData.entry.id;
-
-                // Use the ticket for subsequent requests
-                const ticketAuthToken = `Basic ${btoa(`${username}:${ticket}`)}`;
-                this.apiUtils.setToken(ticketAuthToken);
-            }
-
-            // Test authentication by fetching user profile
-            const userProfile = await this.fetchUserProfile(username);
-
-            this.logOperation('login successful', { userId: username });
-
-            return {
-                token: this.apiUtils.getToken()!,
-                user: userProfile
+            const headers: RequestHeaders = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
             };
 
-        } catch (error) {
-            this.logError('login failed', error);
-            this.apiUtils.setToken(null);
-            throw this.createError('Authentication failed', error);
-        }
-    }
-
-    async logout(): Promise<void> {
-        try {
-            if (!this.apiUtils.isAuthenticated()) {
-                this.logOperation('logout skipped - no active session');
-                return;
+            // Only add Authorization header if we have a token
+            const token = this.apiUtils.getToken();
+            if (token) {
+                headers['Authorization'] = token;
             }
 
-            this.logOperation('logout started');
-
-            if (Platform.OS !== 'web') {
-                const logoutUrl = this.buildUrl('api/-default-/public/authentication/versions/1/tickets/-me-');
-                
-                try {
-                    await this.apiUtils.fetch(
-                        logoutUrl,
-                        {
-                            method: 'DELETE',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            }
-                        }
-                    );
-                } catch (error) {
-                    // Log but don't throw error for logout failures
-                    this.logError('logout request failed', error);
+            const fetchOptions: RequestInit = {
+                ...options,
+                signal: controller.signal,
+                headers: {
+                    ...headers,
+                    ...options.headers,
                 }
+            };
+
+            // Additional debug logging
+            this.log.debug('Fetch configuration:', {
+                method: fetchOptions.method,
+                hasHeaders: !!fetchOptions.headers,
+                hasSignal: !!fetchOptions.signal
+            });
+
+            const response = await fetch(url, fetchOptions);
+            clearTimeout(timeoutId);
+
+            // Debug log response
+            this.log.debug('Response received:', {
+                status: response.status,
+                statusText: response.statusText,
+                url: response.url
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP Error: ${response.status}`);
             }
 
-            this.apiUtils.setToken(null);
-            this.logOperation('logout completed');
-
+            const jsonData = await response.json();
+            return jsonData;
         } catch (error) {
-            this.logError('logout error', error);
-            this.apiUtils.setToken(null);
-            throw this.createError('Logout failed', error);
+            if (error instanceof Error) {
+                this.log.error('Request failed:', {
+                    url,
+                    method: options.method,
+                    errorMessage: error.message,
+                    errorStack: error.stack
+                });
+            }
+            throw error;
         }
     }
 
-    private async fetchUserProfile(userId: string): Promise<UserProfile> {
+    /**
+     * Handles the mobile authentication flow
+     */
+    private async handleMobileAuth(username: string, password: string): Promise<void> {
         try {
-            this.logOperation('fetchUserProfile', { userId });
+            this.log.info('Using mobile authentication flow');
+            const loginUrl = this.buildUrl('api/-default-/public/authentication/versions/1/tickets');
+            this.log.debug('Login URL:', loginUrl);
 
+            // Use the existing basic auth token for this request
+            const response = await this.makeCustomRequest<TicketResponse>(loginUrl, {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: username,
+                    password: password
+                })
+            });
+
+            if (!response?.entry?.id) {
+                throw new Error('Invalid ticket response');
+            }
+
+            // Continue using the same basic auth token (username:password)
+            // No need to create a new token with the ticket
+            this.log.debug('Continuing with initial auth token');
+            
+        } catch (error) {
+            this.log.error('Mobile login request failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Fetches user profile with retry logic
+     */
+    private async fetchUserProfileWithRetry(userId: string, retryCount = 0): Promise<UserProfile> {
+        try {
+            this.log.debug(`Fetching user profile (attempt ${retryCount + 1}/${CONFIG.MAX_RETRIES})`);
             const profileUrl = this.buildUrl(`api/-default-/public/alfresco/versions/1/people/${userId}`);
-            const response = await this.apiUtils.fetch(profileUrl);
-            const data = await this.handleResponse<{ entry: any }>(response);
-
-            if (!data.entry) {
+            
+            const data = await this.makeCustomRequest<ProfileResponse>(profileUrl);
+            
+            if (!data?.entry) {
                 throw new Error('Invalid user profile response');
             }
 
@@ -126,12 +185,101 @@ export class AuthService extends BaseService {
                 username: data.entry.id || userId
             };
 
-            this.logOperation('fetchUserProfile successful', { userId: profile.id });
+            this.log.debug('Profile processed successfully');
             return profile;
 
         } catch (error) {
-            this.logError('fetchUserProfile failed', error);
-            throw error; // Propagate error to login method
+            this.log.error(`Profile fetch attempt ${retryCount + 1} failed:`, error);
+
+            if (retryCount < CONFIG.MAX_RETRIES - 1) {
+                const delayTime = CONFIG.RETRY_DELAY * (retryCount + 1);
+                this.log.debug(`Retrying after ${delayTime}ms...`);
+                await this.delay(delayTime);
+                return this.fetchUserProfileWithRetry(userId, retryCount + 1);
+            }
+
+            throw error;
+        }
+    }
+
+    /**
+     * Main login method
+     */
+    async login(username: string, password: string): Promise<AuthResponse> {
+        try {
+            this.log.info('Starting login process');
+            this.log.debug('Platform:', Platform.OS);
+            this.log.debug('Base URL:', this.baseUrl);
+
+            // Create basic auth token for initial auth
+            const base64Credentials = btoa(`${username}:${password}`);
+            const basicAuthToken = `Basic ${base64Credentials}`;
+            
+            this.log.debug('Setting initial auth token');
+            this.apiUtils.setToken(basicAuthToken);
+
+            if (Platform.OS !== 'web') {
+                await this.handleMobileAuth(username, password);
+            } else {
+                this.log.info('Using web authentication flow');
+            }
+
+            this.log.info('Fetching user profile');
+            const userProfile = await this.fetchUserProfileWithRetry(username);
+            this.log.info('User profile fetched successfully');
+
+            return {
+                token: this.apiUtils.getToken()!,
+                user: userProfile
+            };
+
+        } catch (error) {
+            this.log.error('Login failed:', error);
+            this.apiUtils.setToken(null);
+
+            if (error instanceof Error) {
+                if (error.message.includes('timeout')) {
+                    throw this.createError('Request timeout: The server is taking too long to respond', error);
+                } else if (error.message.includes('Network request failed')) {
+                    throw this.createError('Network error: Unable to connect to the server', error);
+                } else if (error.message.includes('401')) {
+                    throw this.createError('Invalid username or password', error);
+                }
+            }
+
+            throw this.createError('Authentication failed', error);
+        }
+    }
+
+    async logout(): Promise<void> {
+        try {
+            this.log.info('Starting logout process');
+            if (!this.apiUtils.isAuthenticated()) {
+                this.log.info('No active session, skipping logout');
+                return;
+            }
+
+            if (Platform.OS !== 'web') {
+                this.log.info('Using mobile logout flow');
+                const logoutUrl = this.buildUrl('api/-default-/public/authentication/versions/1/tickets/-me-');
+                
+                try {
+                    await this.makeCustomRequest(logoutUrl, {
+                        method: 'DELETE'
+                    });
+                    this.log.info('Mobile logout request successful');
+                } catch (error) {
+                    this.log.error('Mobile logout request failed:', error);
+                }
+            }
+
+            this.apiUtils.setToken(null);
+            this.log.info('Logout completed');
+
+        } catch (error) {
+            this.log.error('Logout error:', error);
+            this.apiUtils.setToken(null);
+            throw this.createError('Logout failed', error);
         }
     }
 

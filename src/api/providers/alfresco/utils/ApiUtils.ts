@@ -58,6 +58,7 @@ export class ApiUtils {
             // Add authentication header if token exists
             if (this.token) {
                 headers.set('Authorization', this.token);
+                console.log("Token inside ApiUtils.fetch: ", this.token);
             }
 
             // Mobile-specific headers

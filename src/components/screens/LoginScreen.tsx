@@ -29,12 +29,35 @@ import { useDispatch } from 'react-redux';
 import { setUserProfile, setServerUrl, setAuthToken } from '../../store/slices/authSlice';
 import { AuthResponse } from '../../api';
 import theme from '../../theme/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Window dimensions for responsive design
 const windowWidth = Dimensions.get('window').width;
+
+// Logger utility for consistent logging format
+const Logger = {
+    debug: (message: string, data?: any) => {
+        console.debug(`[LoginScreen] ${message}`, data || '');
+    },
+    error: (message: string, error?: any) => {
+        console.error(`[LoginScreen] ${message}`, error || '');
+    },
+    info: (message: string, data?: any) => {
+        console.info(`[LoginScreen] ${message}`, data || '');
+    }
+};
 
 interface LoginScreenProps {
     onLoginSuccess: () => void;
 }
+
+interface ErrorDialogProps {
+    visible: boolean;
+    title: string;
+    message: string;
+    onDismiss: () => void;
+}
+
 interface Styles {
     container: ViewStyle;
     keyboardAvoid: ViewStyle;
@@ -49,14 +72,11 @@ interface Styles {
     errorTitle: TextStyle;
     errorMessage: TextStyle;
 }
-interface ErrorDialogProps {
-    visible: boolean;
-    title: string;
-    message: string;
-    onDismiss: () => void;
-}
 
-
+/**
+ * Error Dialog Component
+ * Displays error messages in a modal dialog
+ */
 const ErrorDialog: React.FC<ErrorDialogProps> = ({ visible, title, message, onDismiss }) => (
     <Portal>
         <Dialog visible={visible} onDismiss={onDismiss}>
@@ -71,9 +91,14 @@ const ErrorDialog: React.FC<ErrorDialogProps> = ({ visible, title, message, onDi
     </Portal>
 );
 
+/**
+ * Login Screen Component
+ * Handles user authentication and initial setup
+ */
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     const dispatch = useDispatch();
     
+    // State management
     const [localServerUrl, setLocalServerUrl] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -84,8 +109,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     const [fadeAnim] = useState(new Animated.Value(0));
     const [logoLoaded, setLogoLoaded] = useState(false);
 
+    // Handle logo fade-in animation on load
     useEffect(() => {
         if (logoLoaded) {
+            Logger.debug('Logo loaded, starting fade animation');
             Animated.timing(fadeAnim, {
                 toValue: 1,
                 duration: 1000,
@@ -94,11 +121,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         }
     }, [logoLoaded]);
 
+    /**
+     * Shows error dialog with given title and message
+     * Also logs the error for debugging
+     */
     const showError = (title: string, message: string) => {
+        Logger.error('Error occurred', { title, message });
         setErrorMessage({ title, message });
         setErrorDialogVisible(true);
     };
 
+    /**
+     * Validates the server URL format
+     * Returns boolean indicating if URL is valid
+     */
     const validateUrl = (url: string): boolean => {
         try {
             const urlPattern = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
@@ -108,49 +144,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             }
 
             new URL(url);
+            Logger.debug('URL validation successful', { url });
             return true;
         } catch (error) {
+            Logger.error('URL validation failed', error);
             showError('Invalid URL', 'Please enter a valid server URL');
             return false;
         }
     };
 
-    const testConnection = async (url: string): Promise<boolean> => {
-        try {
-            if (Platform.OS !== 'web') {
-                return true;
-            }
+    
 
-            const response = await fetch(`${url}/api/-default-/public/alfresco/versions/1`);
-            
-            if (response.status === 401) {
-                return true;
-            }
-            
-            if (!response.ok) {
-                throw new Error(`Server responded with status: ${response.status}`);
-            }
-
-            return true;
-        } catch (error) {
-            if (Platform.OS !== 'web') {
-                return true;
-            }
-            
-            if (error instanceof Error) {
-                const errorMessage = error.message.includes('Failed to fetch')
-                    ? 'Unable to connect to the server. Please check:\n\n' +
-                      '• The server URL is correct\n' +
-                      '• Your internet connection is working\n' +
-                      '• The server is accessible'
-                    : 'Unable to verify Alfresco server. Please check if the URL is correct.';
-                
-                showError('Connection Failed', errorMessage);
-            }
-            return false;
-        }
-    };
-
+    /**
+     * Formats the server URL to ensure proper structure
+     * Adds https:// if missing and ensures proper Alfresco endpoint
+     */
     const formatServerUrl = (url: string): string => {
         let formattedUrl = url.trim();
         
@@ -164,71 +172,163 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             formattedUrl = `${formattedUrl}/alfresco`;
         }
         
+        Logger.debug('URL formatted', { original: url, formatted: formattedUrl });
         return formattedUrl;
     };
 
-    const handleLogin = async () => {
+    /**
+ * Tests connection to the server with platform-specific handling
+ */
+const testConnection = async (url: string): Promise<boolean> => {
+    try {
+        Logger.info('Testing connection to server', { url });
+        
+        // For iOS, skip detailed connection test
+        if (Platform.OS === 'ios') {
+            Logger.debug('iOS platform detected, skipping detailed connection test');
+            return true;
+        }
+
+        const response = await fetch(`${url}/api/-default-/public/alfresco/versions/1`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            // Add timeout to prevent hanging
+            signal: AbortSignal.timeout(10000)
+        });
+        
+        Logger.debug('Server response received', { status: response.status });
+        
+        if (response.status === 401) {
+            return true;
+        }
+        
+        if (!response.ok) {
+            throw new Error(`Server responded with status: ${response.status}`);
+        }
+
+        return true;
+    } catch (error) {
+        Logger.error('Connection test failed', error);
+        
+        if (Platform.OS === 'ios') {
+            // Continue anyway on iOS
+            Logger.debug('Continuing despite connection error on iOS');
+            return true;
+        }
+        
+        if (error instanceof Error) {
+            const errorMessage = error.message.includes('Failed to fetch')
+                ? 'Unable to connect to the server. Please check:\n\n' +
+                  '• The server URL is correct\n' +
+                  '• Your internet connection is working\n' +
+                  '• The server is accessible'
+                : 'Unable to verify Alfresco server. Please check if the URL is correct.';
+            
+            showError('Connection Failed', errorMessage);
+        }
+        return false;
+    }
+};
+
+/**
+ * Handles the login process with improved iOS support
+ */
+const handleLogin = async () => {
+    try {
+        if (!localServerUrl.trim() || !username.trim() || !password.trim()) {
+            showError('Missing Information', 'Please fill in all fields');
+            return;
+        }
+
+        setIsLoading(true);
+
+        Logger.info('Starting login process', {
+            platform: Platform.OS,
+            serverUrl: localServerUrl,
+            username
+        });
+
+        const formattedUrl = formatServerUrl(localServerUrl);
+        if (!validateUrl(formattedUrl)) {
+            setIsLoading(false);
+            return;
+        }
+
+        const isConnected = await testConnection(formattedUrl);
+        if (!isConnected && Platform.OS !== 'ios') {
+            setIsLoading(false);
+            return;
+        }
+
+        // Store server URL
         try {
-            if (!localServerUrl.trim() || !username.trim() || !password.trim()) {
-                showError('Missing Information', 'Please fill in all fields');
-                return;
-            }
-    
-            setIsLoading(true);
-    
-            const formattedUrl = formatServerUrl(localServerUrl);
-            if (!validateUrl(formattedUrl)) {
-                return;
-            }
-    
-            const isConnected = await testConnection(formattedUrl);
-            if (!isConnected) {
-                return;
-            }
-    
-            localStorage.setItem('serverUrl', formattedUrl);
-            dispatch(setServerUrl(formattedUrl));
-    
-            const config: ApiConfig = {
-                baseUrl: formattedUrl,
-                timeout: 30000,
-            };
-    
-            const provider = DMSFactory.createProvider('alfresco', config);
+            await AsyncStorage.setItem('serverUrl', formattedUrl);
+            Logger.debug('Server URL stored successfully');
+        } catch (storageError) {
+            Logger.error('Failed to store server URL', storageError);
+            // Continue anyway as this is not critical
+        }
+        
+        dispatch(setServerUrl(formattedUrl));
+
+        const config: ApiConfig = {
+            baseUrl: formattedUrl,
+            timeout: Platform.OS === 'ios' ? 60000 : 30000, // Longer timeout for iOS
+        };
+
+        Logger.debug('Creating DMS provider');
+        const provider = DMSFactory.createProvider('alfresco', config);
+
+        Logger.debug('Attempting authentication');
+        try {
             const authResponse = await provider.login(username, password);
+            Logger.info('Login successful');
     
             dispatch(setAuthToken(authResponse.token));
             dispatch(setUserProfile(authResponse.user));
             dispatch(setServerUrl(formattedUrl));
     
             onLoginSuccess();
-        } catch (error) {
-            let title = 'Login Failed';
-            let message = 'An unexpected error occurred. Please try again.';
-            
-            if (error instanceof Error) {
-                if (error.message.includes('401') || 
-                    error.message.includes('Authentication failed') || 
-                    error.message.includes('Unauthorized')) {
-                    title = 'Authentication Failed';
-                    message = 'Invalid username or password. Please try again.';
-                } else if (error.message.includes('Network request failed')) {
-                    title = 'Network Error';
-                    message = 'Unable to connect to the server. Please check your internet connection.';
-                } else if (error.message.includes('timeout')) {
-                    title = 'Connection Timeout';
-                    message = 'The server is taking too long to respond. Please try again.';
-                } else if (error.message.includes('JSON')) {
-                    title = 'Server Error';
-                    message = 'Received invalid response from server. Please verify the server URL.';
-                }
-            }
-            
-            showError(title, message);
-        } finally {
-            setIsLoading(false);
+        } catch (authError) {
+            Logger.error('Authentication failed', authError);
+            throw authError;
         }
-    };
+    // In your handleLogin function, update the error handling:
+
+} catch (error) {
+    let title = 'Login Failed';
+    let message = 'An unexpected error occurred. Please try again.';
+    
+    if (error instanceof Error) {
+        Logger.error('Login error details', {
+            type: error.constructor.name,
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        });
+        
+        if (error.message.includes('timeout')) {
+            title = 'Connection Timeout';
+            message = 'The server is taking too long to respond. Please try again. If this persists, check your internet connection.';
+        } else if (error.message.includes('401') || 
+                  error.message.includes('Authentication failed') || 
+                  error.message.includes('Unauthorized')) {
+            title = 'Authentication Failed';
+            message = 'Invalid username or password. Please try again.';
+        } else if (error.message.includes('Network request failed')) {
+            title = 'Network Error';
+            message = 'Unable to connect to the server. Please check your internet connection.';
+        }
+    }
+    
+    showError(title, message);
+} finally {
+    setIsLoading(false);
+}
+};
 
     return (
         <SafeAreaView style={styles.container}>
@@ -316,16 +416,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     );
 };
 
-const styles = StyleSheet.create({
+// Styles defined using StyleSheet for better performance
+const styles = StyleSheet.create<Styles>({
     container: {
         flex: 1,
         backgroundColor: theme.colors.surfaceBackground,
-    } as ViewStyle,
+    },
     keyboardAvoid: {
         flex: 1,
         justifyContent: 'center',
         padding: theme.spacing.xl,
-    } as ViewStyle,
+    },
     loginContainer: {
         padding: theme.spacing.xl,
         borderRadius: theme.spacing.base,
@@ -338,13 +439,13 @@ const styles = StyleSheet.create({
         } : {
             elevation: 5,
         }),
-    } as ViewStyle,
+    },
     logoContainer: {
         alignItems: 'center',
         marginBottom: theme.spacing.xl,
         width: '100%',
         paddingHorizontal: theme.spacing.xl,
-    } as ViewStyle,
+    },
     logo: {
         width: windowWidth * 0.6,
         maxWidth: 200,
