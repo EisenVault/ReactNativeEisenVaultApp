@@ -1,3 +1,5 @@
+// src/api/providers/alfresco/AlfrescoProvider.ts
+
 import {
     UserProfile,
     AuthResponse,
@@ -39,9 +41,15 @@ export class AlfrescoProvider implements DMSProvider {
         this.folderService = new FolderService(config.baseUrl, this.apiUtils);
         this.searchService = new SearchService(config.baseUrl, this.apiUtils);
     }
+
+    /**
+     * Sets the authentication token for API requests
+     * @param token - Authentication token or null to clear
+     */
     setToken(token: string | null): void {
         this.apiUtils.setToken(token);
     }
+
     /**
      * Authenticates user with Alfresco
      * @param username - User's username
@@ -109,10 +117,15 @@ export class AlfrescoProvider implements DMSProvider {
     /**
      * Retrieves all folders within a parent folder
      * @param parentFolderId - ID of the parent folder
+     * @param filters - Optional filters for the query
+     * @param filters.nodeType - Optional Alfresco node type to filter by (e.g., 'st:sites')
      * @returns Promise resolving to array of Folder objects
      */
-    async getFolders(parentFolderId: string): Promise<Folder[]> {
-        return await this.folderService.getFolders(parentFolderId);
+    async getFolders(
+        parentFolderId: string, 
+        filters?: { nodeType?: string }
+    ): Promise<Folder[]> {
+        return await this.folderService.getFolders(parentFolderId, filters);
     }
 
     /**

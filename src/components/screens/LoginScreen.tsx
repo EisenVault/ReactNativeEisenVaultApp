@@ -133,7 +133,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
     /**
      * Validates the server URL format
-     * Returns boolean indicating if URL is valid
      */
     const validateUrl = (url: string): boolean => {
         try {
@@ -153,11 +152,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         }
     };
 
-    
-
     /**
      * Formats the server URL to ensure proper structure
-     * Adds https:// if missing and ensures proper Alfresco endpoint
      */
     const formatServerUrl = (url: string): string => {
         let formattedUrl = url.trim();
@@ -177,158 +173,93 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     };
 
     /**
- * Tests connection to the server with platform-specific handling
- */
-const testConnection = async (url: string): Promise<boolean> => {
-    try {
-        Logger.info('Testing connection to server', { url });
-        
-        // For iOS, skip detailed connection test
-        if (Platform.OS === 'ios') {
-            Logger.debug('iOS platform detected, skipping detailed connection test');
-            return true;
-        }
+     * Handles the login process
+     */
+    const handleLogin = async () => {
+        try {
+            if (!localServerUrl.trim() || !username.trim() || !password.trim()) {
+                showError('Missing Information', 'Please fill in all fields');
+                return;
+            }
 
-        const response = await fetch(`${url}/api/-default-/public/alfresco/versions/1`, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-            },
-            // Add timeout to prevent hanging
-            signal: AbortSignal.timeout(10000)
-        });
-        
-        Logger.debug('Server response received', { status: response.status });
-        
-        if (response.status === 401) {
-            return true;
-        }
-        
-        if (!response.ok) {
-            throw new Error(`Server responded with status: ${response.status}`);
-        }
+            setIsLoading(true);
 
-        return true;
-    } catch (error) {
-        Logger.error('Connection test failed', error);
-        
-        if (Platform.OS === 'ios') {
-            // Continue anyway on iOS
-            Logger.debug('Continuing despite connection error on iOS');
-            return true;
-        }
-        
-        if (error instanceof Error) {
-            const errorMessage = error.message.includes('Failed to fetch')
-                ? 'Unable to connect to the server. Please check:\n\n' +
-                  '• The server URL is correct\n' +
-                  '• Your internet connection is working\n' +
-                  '• The server is accessible'
-                : 'Unable to verify Alfresco server. Please check if the URL is correct.';
+            Logger.info('Starting login process', {
+                platform: Platform.OS,
+                serverUrl: localServerUrl,
+                username
+            });
+
+            const formattedUrl = formatServerUrl(localServerUrl);
+            if (!validateUrl(formattedUrl)) {
+                setIsLoading(false);
+                return;
+            }
+
+            // Store server URL
+            try {
+                await AsyncStorage.setItem('serverUrl', formattedUrl);
+                Logger.debug('Server URL stored successfully');
+            } catch (storageError) {
+                Logger.error('Failed to store server URL', storageError);
+                // Continue anyway as this is not critical
+            }
             
-            showError('Connection Failed', errorMessage);
-        }
-        return false;
-    }
-};
-
-/**
- * Handles the login process with improved iOS support
- */
-const handleLogin = async () => {
-    try {
-        if (!localServerUrl.trim() || !username.trim() || !password.trim()) {
-            showError('Missing Information', 'Please fill in all fields');
-            return;
-        }
-
-        setIsLoading(true);
-
-        Logger.info('Starting login process', {
-            platform: Platform.OS,
-            serverUrl: localServerUrl,
-            username
-        });
-
-        const formattedUrl = formatServerUrl(localServerUrl);
-        if (!validateUrl(formattedUrl)) {
-            setIsLoading(false);
-            return;
-        }
-
-        const isConnected = await testConnection(formattedUrl);
-        if (!isConnected && Platform.OS !== 'ios') {
-            setIsLoading(false);
-            return;
-        }
-
-        // Store server URL
-        try {
-            await AsyncStorage.setItem('serverUrl', formattedUrl);
-            Logger.debug('Server URL stored successfully');
-        } catch (storageError) {
-            Logger.error('Failed to store server URL', storageError);
-            // Continue anyway as this is not critical
-        }
-        
-        dispatch(setServerUrl(formattedUrl));
-
-        const config: ApiConfig = {
-            baseUrl: formattedUrl,
-            timeout: Platform.OS === 'ios' ? 60000 : 30000, // Longer timeout for iOS
-        };
-
-        Logger.debug('Creating DMS provider');
-        const provider = DMSFactory.createProvider('alfresco', config);
-
-        Logger.debug('Attempting authentication');
-        try {
-            const authResponse = await provider.login(username, password);
-            Logger.info('Login successful');
-    
-            dispatch(setAuthToken(authResponse.token));
-            dispatch(setUserProfile(authResponse.user));
             dispatch(setServerUrl(formattedUrl));
-    
-            onLoginSuccess();
-        } catch (authError) {
-            Logger.error('Authentication failed', authError);
-            throw authError;
-        }
-    // In your handleLogin function, update the error handling:
 
-} catch (error) {
-    let title = 'Login Failed';
-    let message = 'An unexpected error occurred. Please try again.';
-    
-    if (error instanceof Error) {
-        Logger.error('Login error details', {
-            type: error.constructor.name,
-            name: error.name,
-            message: error.message,
-            stack: error.stack
-        });
+            const config: ApiConfig = {
+                baseUrl: formattedUrl,
+                timeout: Platform.OS === 'ios' ? 60000 : 30000, // Longer timeout for iOS
+            };
+
+            Logger.debug('Creating DMS provider');
+            const provider = DMSFactory.createProvider('alfresco', config);
+
+            Logger.debug('Attempting authentication');
+            try {
+                const authResponse = await provider.login(username, password);
+                Logger.info('Login successful');
         
-        if (error.message.includes('timeout')) {
-            title = 'Connection Timeout';
-            message = 'The server is taking too long to respond. Please try again. If this persists, check your internet connection.';
-        } else if (error.message.includes('401') || 
-                  error.message.includes('Authentication failed') || 
-                  error.message.includes('Unauthorized')) {
-            title = 'Authentication Failed';
-            message = 'Invalid username or password. Please try again.';
-        } else if (error.message.includes('Network request failed')) {
-            title = 'Network Error';
-            message = 'Unable to connect to the server. Please check your internet connection.';
+                dispatch(setAuthToken(authResponse.token));
+                dispatch(setUserProfile(authResponse.user));
+                dispatch(setServerUrl(formattedUrl));
+        
+                onLoginSuccess();
+            } catch (authError) {
+                Logger.error('Authentication failed', authError);
+                throw authError;
+            }
+        } catch (error) {
+            let title = 'Login Failed';
+            let message = 'An unexpected error occurred. Please try again.';
+            
+            if (error instanceof Error) {
+                Logger.error('Login error details', {
+                    type: error.constructor.name,
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack
+                });
+                
+                if (error.message.includes('timeout')) {
+                    title = 'Connection Timeout';
+                    message = 'The server is taking too long to respond. Please try again. If this persists, check your internet connection.';
+                } else if (error.message.includes('401') || 
+                          error.message.includes('Authentication failed') || 
+                          error.message.includes('Unauthorized')) {
+                    title = 'Authentication Failed';
+                    message = 'Invalid username or password. Please try again.';
+                } else if (error.message.includes('Network request failed')) {
+                    title = 'Network Error';
+                    message = 'Unable to connect to the server. Please check your internet connection.';
+                }
+            }
+            
+            showError(title, message);
+        } finally {
+            setIsLoading(false);
         }
-    }
-    
-    showError(title, message);
-} finally {
-    setIsLoading(false);
-}
-};
+    };
 
     return (
         <SafeAreaView style={styles.container}>

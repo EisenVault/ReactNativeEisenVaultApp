@@ -80,6 +80,10 @@ export interface ApiConfig {
   headers?: Record<string, string>;
 }
 
+// src/api/types.ts
+
+// Previous interfaces remain the same...
+
 /**
  * Main DMS Provider interface.
  * Defines the contract that any DMS provider implementation must fulfill.
@@ -99,13 +103,15 @@ export interface DMSProvider {
   downloadDocument(documentId: string): Promise<Blob>;
   
   // Folder Operations
-  getFolders(parentFolderId: string): Promise<Folder[]>;
+  getFolders(parentFolderId: string, filters?: { nodeType?: string }): Promise<Folder[]>;
   createFolder(parentFolderId: string, name: string): Promise<Folder>;
   deleteFolder(folderId: string): Promise<void>;
   
   // Search Operations
   search(query: string): Promise<SearchResult>;
 }
+
+
 
 /**
  * Search parameters interface.

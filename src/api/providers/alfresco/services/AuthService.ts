@@ -7,9 +7,9 @@ import { AuthResponse, UserProfile } from '../../../types';
 
 // Configuration constants
 const CONFIG = {
-    TIMEOUT: 30000,
+    TIMEOUT: 30000, // 30 seconds timeout
     MAX_RETRIES: 3,
-    RETRY_DELAY: 2000,
+    RETRY_DELAY: 2000, // Base delay of 2 seconds between retries
     LOG_PREFIX: '[AuthService]'
 };
 
@@ -41,10 +41,16 @@ export class AuthService extends BaseService {
         super(baseUrl, apiUtils);
     }
 
+    /**
+     * Creates a delay promise for the specified duration
+     */
     private delay(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    /**
+     * Logging utilities with consistent formatting
+     */
     private log = {
         info: (message: string, data?: any) => console.log(`${CONFIG.LOG_PREFIX} ${message}`, data || ''),
         error: (message: string, error?: any) => console.error(`${CONFIG.LOG_PREFIX} ${message}`, error || ''),
@@ -52,25 +58,40 @@ export class AuthService extends BaseService {
     };
 
     /**
+     * Creates a timeout promise with abort controller
+     * This is a cross-platform compatible implementation that works on Android
+     */
+    private createTimeoutPromise(): { controller: AbortController; timeoutPromise: Promise<never> } {
+        const controller = new AbortController();
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => {
+                controller.abort();
+                reject(new Error('Request timeout'));
+            }, CONFIG.TIMEOUT);
+        });
+        return { controller, timeoutPromise };
+    }
+
+    /**
      * Protected request handler that adds necessary headers and timeout
+     * Works across all platforms (web, iOS, and Android)
      */
     protected async makeCustomRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
-        // Debug log for iOS requests
-        if (Platform.OS === 'ios') {
-            this.log.debug('Making iOS request:', {
+        // Debug log for mobile requests
+        if (Platform.OS !== 'web') {
+            this.log.debug('Making mobile request:', {
                 url,
                 method: options.method || 'GET',
-                hasToken: !!this.apiUtils.getToken()
+                hasToken: !!this.apiUtils.getToken(),
+                platform: Platform.OS
             });
         }
 
         try {
             this.log.debug("Inside makeCustomRequest ... token from apiUtils: ", this.apiUtils.getToken());
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => {
-                controller.abort();
-                this.log.debug('Request timed out');
-            }, CONFIG.TIMEOUT);
+            
+            // Create timeout with abort controller
+            const { controller, timeoutPromise } = this.createTimeoutPromise();
 
             const headers: RequestHeaders = {
                 'Accept': 'application/json',
@@ -99,8 +120,11 @@ export class AuthService extends BaseService {
                 hasSignal: !!fetchOptions.signal
             });
 
-            const response = await fetch(url, fetchOptions);
-            clearTimeout(timeoutId);
+            // Race between the fetch and the timeout
+            const response = await Promise.race([
+                fetch(url, fetchOptions),
+                timeoutPromise
+            ]) as Response;
 
             // Debug log response
             this.log.debug('Response received:', {
@@ -129,7 +153,8 @@ export class AuthService extends BaseService {
     }
 
     /**
-     * Handles the mobile authentication flow
+     * Handles the mobile-specific authentication flow
+     * Uses the ticket-based authentication for mobile platforms
      */
     private async handleMobileAuth(username: string, password: string): Promise<void> {
         try {
@@ -162,6 +187,7 @@ export class AuthService extends BaseService {
 
     /**
      * Fetches user profile with retry logic
+     * Will retry failed requests up to MAX_RETRIES times
      */
     private async fetchUserProfileWithRetry(userId: string, retryCount = 0): Promise<UserProfile> {
         try {
@@ -192,7 +218,7 @@ export class AuthService extends BaseService {
             this.log.error(`Profile fetch attempt ${retryCount + 1} failed:`, error);
 
             if (retryCount < CONFIG.MAX_RETRIES - 1) {
-                const delayTime = CONFIG.RETRY_DELAY * (retryCount + 1);
+                const delayTime = CONFIG.RETRY_DELAY * (retryCount + 1); // Progressive delay
                 this.log.debug(`Retrying after ${delayTime}ms...`);
                 await this.delay(delayTime);
                 return this.fetchUserProfileWithRetry(userId, retryCount + 1);
@@ -204,6 +230,7 @@ export class AuthService extends BaseService {
 
     /**
      * Main login method
+     * Handles both web and mobile authentication flows
      */
     async login(username: string, password: string): Promise<AuthResponse> {
         try {
@@ -251,6 +278,10 @@ export class AuthService extends BaseService {
         }
     }
 
+    /**
+     * Handles user logout
+     * Cleans up any existing sessions and tokens
+     */
     async logout(): Promise<void> {
         try {
             this.log.info('Starting logout process');
@@ -283,6 +314,9 @@ export class AuthService extends BaseService {
         }
     }
 
+    /**
+     * Checks if the user is currently authenticated
+     */
     isAuthenticated(): boolean {
         return this.apiUtils.isAuthenticated();
     }

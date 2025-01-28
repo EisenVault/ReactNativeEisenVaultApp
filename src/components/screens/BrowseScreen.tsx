@@ -1,4 +1,11 @@
 // src/components/screens/BrowseScreen.tsx
+//
+// This component provides a browsing interface for document management systems (DMS).
+// It is currently implemented for Alfresco DMS with plans to support Angora DMS.
+// For Alfresco, it provides a specialized view that:
+// - Starts directly at the Sites folder level
+// - Hides the Sites folder from breadcrumb navigation
+// - Prevents navigation above the Sites folder level
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -21,12 +28,30 @@ import { DMSFactory, ApiConfig } from '../../api';
 import { ChevronLeft, Home } from 'lucide-react-native';
 import theme from '../../theme/theme';
 
+// Define supported provider types for the DMS system
+type ProviderType = 'alfresco' | 'angora';
+
+// Constants for DMS providers and their specific configurations
+const DMS_PROVIDERS = {
+  ALFRESCO: 'alfresco' as ProviderType,
+  ANGORA: 'angora' as ProviderType,
+};
+
+// Alfresco-specific constants
+const ALFRESCO_CONSTANTS = {
+  ROOT_ID: '-root-',           // Root folder reference
+  SITES_NODE_TYPE: 'st:sites', // Alfresco Sites folder type
+  SITES_FOLDER_NAME: 'Sites'   // Display name for sites folder
+} as const;
+
+// Interface for items displayed in the browse list
 interface BrowseItem {
   id: string;
   type: 'file' | 'folder';
   data: Document | Folder;
 }
 
+// Style types for type safety
 interface Styles {
   container: ViewStyle;
   centerContainer: ViewStyle;
@@ -41,34 +66,47 @@ interface Styles {
 }
 
 const BrowseScreen = () => {
+  // Component state management
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<BrowseItem[]>([]);
-  const [currentFolderId, setCurrentFolderId] = useState('-my-');
+  const [currentFolderId, setCurrentFolderId] = useState<string>(ALFRESCO_CONSTANTS.ROOT_ID);
   const [breadcrumbs, setBreadcrumbs] = useState<Folder[]>([]);
   const [provider, setProvider] = useState<DMSProvider | null>(null);
+  const [providerType, setProviderType] = useState<ProviderType>(DMS_PROVIDERS.ALFRESCO);
+  // Track Sites folder ID to handle navigation and UI visibility
+  const [sitesFolderId, setSitesFolderId] = useState<string | null>(null);
 
+  // Get authentication state from Redux store
   const { userProfile, isAuthenticated, serverUrl, authToken } = useSelector(
     (state: RootState) => state.auth
   );
 
-  // Initialize provider when authentication is available
+  // Initialize DMS provider and navigate to initial folder
   useEffect(() => {
-    const initProvider = async () => {
+    const initializeAndNavigate = async () => {
       try {
         if (!serverUrl || !authToken) {
           setError('Authentication data missing. Please log in again.');
           return;
         }
     
+        // Create DMS provider configuration
         const config: ApiConfig = {
           baseUrl: serverUrl,
           timeout: 30000,
         };
     
-        const dmsProvider = DMSFactory.createProvider('alfresco', config);
+        // Initialize the appropriate DMS provider
+        const dmsProvider = DMSFactory.createProvider(providerType, config);
         dmsProvider.setToken(authToken);
         setProvider(dmsProvider);
+
+        // For Alfresco, navigate directly to sites
+        if (providerType === DMS_PROVIDERS.ALFRESCO) {
+          await findAndNavigateToSites(dmsProvider);
+        }
+        // Future Angora initialization will go here
       } catch (err) {
         console.error('Provider initialization error:', err);
         setError(err instanceof Error ? err.message : 'Failed to initialize browser');
@@ -76,9 +114,36 @@ const BrowseScreen = () => {
     };
 
     if (isAuthenticated && !provider) {
-      initProvider();
+      initializeAndNavigate();
     }
-  }, [isAuthenticated, serverUrl, authToken]);
+  }, [isAuthenticated, serverUrl, authToken, providerType]);
+
+  /**
+   * Finds and navigates to the Sites folder in Alfresco
+   * Uses nodeType filter to find the specific Sites folder
+   * Sets up initial navigation state without showing Sites in breadcrumbs
+   */
+  const findAndNavigateToSites = async (dmsProvider: DMSProvider) => {
+    try {
+      // Get the Sites folder using the nodeType filter
+      const folders = await dmsProvider.getFolders(ALFRESCO_CONSTANTS.ROOT_ID, {
+        nodeType: ALFRESCO_CONSTANTS.SITES_NODE_TYPE
+      });
+
+      if (folders && folders.length > 0) {
+        const sitesFolder = folders[0]; // There should only be one Sites folder
+        setSitesFolderId(sitesFolder.id); // Store Sites folder ID for navigation control
+        setBreadcrumbs([]); // Don't show Sites in breadcrumbs
+        setCurrentFolderId(sitesFolder.id);
+      } else {
+        console.warn('Sites folder not found');
+        setError('Sites folder not found. Please contact your administrator.');
+      }
+    } catch (err) {
+      console.error('Failed to find Sites folder:', err);
+      throw err;
+    }
+  };
 
   // Load folder contents whenever currentFolderId changes
   useEffect(() => {
@@ -87,6 +152,10 @@ const BrowseScreen = () => {
     }
   }, [provider, currentFolderId]);
 
+  /**
+   * Loads the contents of the current folder
+   * Fetches both folders and documents concurrently for efficiency
+   */
   const loadCurrentFolder = async () => {
     if (!provider) return;
 
@@ -94,16 +163,17 @@ const BrowseScreen = () => {
       setIsLoading(true);
       setError(null);
 
-      console.log('Loading folder:', currentFolderId); // Debug log
+      console.log('Loading folder:', currentFolderId);
 
-      // Fetch both folders and documents concurrently
+      // Fetch folders and documents in parallel
       const [folders, documents] = await Promise.all([
         provider.getFolders(currentFolderId),
         provider.getDocuments(currentFolderId)
       ]);
 
-      console.log('Loaded folders:', folders.length, 'documents:', documents.length); // Debug log
+      console.log('Loaded folders:', folders.length, 'documents:', documents.length);
 
+      // Format items for display
       const formattedItems: BrowseItem[] = [
         ...folders.map(folder => ({
           id: folder.id,
@@ -126,8 +196,12 @@ const BrowseScreen = () => {
     }
   };
 
+  /**
+   * Handles folder navigation
+   * Updates breadcrumbs and loads the selected folder contents
+   */
   const handleFolderPress = async (folder: Folder) => {
-    console.log('Folder pressed:', folder.id, folder.name); // Debug log
+    console.log('Folder pressed:', folder.id, folder.name);
     
     // Update breadcrumbs first
     const newBreadcrumbs = [...breadcrumbs, folder];
@@ -137,6 +211,10 @@ const BrowseScreen = () => {
     setCurrentFolderId(folder.id);
   };
 
+  /**
+   * Handles file opening/downloading
+   * Creates a blob URL and opens it in a new window
+   */
   const handleFilePress = async (file: Document) => {
     if (!provider) return;
 
@@ -150,26 +228,52 @@ const BrowseScreen = () => {
     }
   };
 
+  /**
+   * Handles back navigation
+   * Special handling for Alfresco to prevent going above Sites level
+   * and to hide Sites folder from breadcrumbs
+   */
   const handleBackPress = () => {
     if (breadcrumbs.length > 0) {
       const newBreadcrumbs = [...breadcrumbs];
-      const lastFolder = newBreadcrumbs.pop(); // Remove current folder
+      newBreadcrumbs.pop();
       setBreadcrumbs(newBreadcrumbs);
       
-      // Set current folder ID to parent folder or root
+      // For Alfresco, prevent going above sites level
+      if (providerType === DMS_PROVIDERS.ALFRESCO && newBreadcrumbs.length === 0) {
+        // Return to sites folder without adding it to breadcrumbs
+        if (sitesFolderId) {
+          setBreadcrumbs([]);
+          setCurrentFolderId(sitesFolderId);
+          return;
+        }
+      }
+      
+      // Set current folder ID to parent folder
       const parentFolderId = newBreadcrumbs.length > 0 
         ? newBreadcrumbs[newBreadcrumbs.length - 1].id 
-        : '-my-';
+        : sitesFolderId || ALFRESCO_CONSTANTS.ROOT_ID;
       
       setCurrentFolderId(parentFolderId);
     }
   };
 
-  const handleHomePress = () => {
-    setBreadcrumbs([]);
-    setCurrentFolderId('-my-');
+  /**
+   * Handles home navigation
+   * For Alfresco, returns to Sites folder without showing it in breadcrumbs
+   */
+  const handleHomePress = async () => {
+    if (providerType === DMS_PROVIDERS.ALFRESCO && provider) {
+      await findAndNavigateToSites(provider);
+    } else {
+      setBreadcrumbs([]);
+      setCurrentFolderId(ALFRESCO_CONSTANTS.ROOT_ID);
+    }
   };
 
+  /**
+   * Renders a single list item (file or folder)
+   */
   const renderItem = ({ item }: { item: BrowseItem }) => {
     if (item.type === 'file') {
       return (
@@ -187,6 +291,10 @@ const BrowseScreen = () => {
     );
   };
 
+  /**
+   * Renders the breadcrumb navigation
+   * Shows current folder hierarchy with Home button
+   */
   const renderBreadcrumbs = () => (
     <View style={styles.breadcrumbs}>
       <ScrollView 
@@ -220,6 +328,7 @@ const BrowseScreen = () => {
     </View>
   );
 
+  // Loading state
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
@@ -228,6 +337,7 @@ const BrowseScreen = () => {
     );
   }
 
+  // Error state
   if (error) {
     return (
       <View style={styles.centerContainer}>
@@ -243,10 +353,12 @@ const BrowseScreen = () => {
     );
   }
 
+  // Main render
   return (
     <View style={styles.container}>
       {renderBreadcrumbs()}
-      {breadcrumbs.length > 0 && (
+      {/* Only show back button when not at Sites level */}
+      {breadcrumbs.length > 0 && currentFolderId !== sitesFolderId && (
         <Button 
           mode="text"
           onPress={handleBackPress}
@@ -271,6 +383,7 @@ const BrowseScreen = () => {
   );
 };
 
+// Styles
 const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,

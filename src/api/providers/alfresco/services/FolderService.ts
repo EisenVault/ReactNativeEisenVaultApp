@@ -5,23 +5,31 @@ import { Folder, FolderListResponse, FolderResponse } from '../../../types';
 import { MapperUtils } from '../utils/MapperUtils';
 
 /**
- * Handles all folder-related operations with the Alfresco API
- * Includes creating, deleting, and managing folders
+ * Service class for handling all folder-related operations in Alfresco
+ * Provides methods for retrieving, creating, updating, and deleting folders
  */
 export class FolderService extends BaseService {
     /**
      * Retrieves all folders within a specified parent folder
      * @param parentFolderId - Node ID of the parent folder
+     * @param filters - Optional filters for the query
+     * @param filters.nodeType - Optional Alfresco node type to filter by (e.g., 'st:sites')
      * @returns Promise resolving to array of Folder objects
      */
-    async getFolders(parentFolderId: string): Promise<Folder[]> {
+    async getFolders(parentFolderId: string, filters?: { nodeType?: string }): Promise<Folder[]> {
         try {
-            this.logOperation('getFolders', { parentFolderId });
+            this.logOperation('getFolders', { parentFolderId, filters });
 
             const params = new URLSearchParams({
-                where: '(isFolder=true)',
                 include: ['path', 'properties', 'allowableOperations'].join(',')
             });
+
+            // If no specific nodeType is provided, default to isFolder=true
+            if (!filters?.nodeType) {
+                params.append('where', '(isFolder=true)');
+            } else {
+                params.append('where', `(nodeType='${filters.nodeType}')`);
+            }
 
             const data = await this.makeRequest<FolderListResponse>(
                 `/api/-default-/public/alfresco/versions/1/nodes/${parentFolderId}/children?${params}`
