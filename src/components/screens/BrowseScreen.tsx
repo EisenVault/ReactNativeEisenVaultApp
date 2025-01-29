@@ -1,11 +1,9 @@
 // src/components/screens/BrowseScreen.tsx
 //
 // This component provides a browsing interface for document management systems (DMS).
-// It is currently implemented for Alfresco DMS with plans to support Angora DMS.
-// For Alfresco, it provides a specialized view that:
-// - Starts directly at the Sites folder level
-// - Hides the Sites folder from breadcrumb navigation
-// - Prevents navigation above the Sites folder level
+// For Alfresco, it directly shows the contents of the Sites folder, skipping the Sites
+// folder itself in the navigation hierarchy. It prevents navigation above the Sites level
+// and provides a clean breadcrumb trail starting from the site contents.
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -16,7 +14,8 @@ import {
   ActivityIndicator, 
   TextStyle, 
   ViewStyle, 
-  Platform 
+  Platform,
+  SafeAreaView 
 } from 'react-native';
 import { Text, Button } from 'react-native-paper';
 import { useSelector } from 'react-redux';
@@ -26,9 +25,10 @@ import FolderItem from '../common/FolderItem';
 import { Document, Folder, DMSProvider } from '../../api/types';
 import { DMSFactory, ApiConfig } from '../../api';
 import { ChevronLeft, Home } from 'lucide-react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import theme from '../../theme/theme';
 
-// Define supported provider types for the DMS system
+// Define supported provider types
 type ProviderType = 'alfresco' | 'angora';
 
 // Constants for DMS providers and their specific configurations
@@ -54,10 +54,16 @@ interface BrowseItem {
 // Style types for type safety
 interface Styles {
   container: ViewStyle;
+  contentContainer: ViewStyle;
   centerContainer: ViewStyle;
   listContent: ViewStyle;
   breadcrumbs: ViewStyle;
   breadcrumbsContent: ViewStyle;
+  breadcrumbsContainer: ViewStyle;
+  breadcrumbRow: ViewStyle;
+  breadcrumbItem: ViewStyle;
+  breadcrumbButton: ViewStyle;
+  breadcrumbLabel: TextStyle;
   breadcrumbSeparator: TextStyle;
   backButton: ViewStyle;
   errorText: TextStyle;
@@ -66,7 +72,7 @@ interface Styles {
 }
 
 const BrowseScreen = () => {
-  // Component state management
+  // State management
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<BrowseItem[]>([]);
@@ -82,8 +88,10 @@ const BrowseScreen = () => {
     (state: RootState) => state.auth
   );
 
-  // Initialize DMS provider and navigate to initial folder
+  // Initialize provider and navigate to initial folder
   useEffect(() => {
+    let mounted = true;
+    
     const initializeAndNavigate = async () => {
       try {
         if (!serverUrl || !authToken) {
@@ -91,70 +99,110 @@ const BrowseScreen = () => {
           return;
         }
     
-        // Create DMS provider configuration
         const config: ApiConfig = {
           baseUrl: serverUrl,
           timeout: 30000,
         };
     
-        // Initialize the appropriate DMS provider
         const dmsProvider = DMSFactory.createProvider(providerType, config);
         dmsProvider.setToken(authToken);
-        setProvider(dmsProvider);
-
-        // For Alfresco, navigate directly to sites
-        if (providerType === DMS_PROVIDERS.ALFRESCO) {
-          await findAndNavigateToSites(dmsProvider);
+        
+        if (mounted) {
+          setProvider(dmsProvider);
+          
+          // For Alfresco, navigate directly to sites contents
+          if (providerType === DMS_PROVIDERS.ALFRESCO) {
+            await findAndNavigateToSites(dmsProvider);
+          }
         }
-        // Future Angora initialization will go here
       } catch (err) {
         console.error('Provider initialization error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to initialize browser');
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Failed to initialize browser');
+        }
       }
     };
 
     if (isAuthenticated && !provider) {
+      setIsLoading(true);
       initializeAndNavigate();
     }
+
+    return () => {
+      mounted = false;
+    };
   }, [isAuthenticated, serverUrl, authToken, providerType]);
 
   /**
-   * Finds and navigates to the Sites folder in Alfresco
-   * Uses nodeType filter to find the specific Sites folder
-   * Sets up initial navigation state without showing Sites in breadcrumbs
+   * Finds the Sites folder and loads its contents directly
+   * Handles platform-specific navigation behavior
    */
   const findAndNavigateToSites = async (dmsProvider: DMSProvider) => {
     try {
-      // Get the Sites folder using the nodeType filter
-      const folders = await dmsProvider.getFolders(ALFRESCO_CONSTANTS.ROOT_ID, {
+      console.log('Finding sites folder...');
+      
+      // First get the Sites folder using the nodeType filter
+      const rootFolders = await dmsProvider.getFolders(ALFRESCO_CONSTANTS.ROOT_ID, {
         nodeType: ALFRESCO_CONSTANTS.SITES_NODE_TYPE
       });
 
-      if (folders && folders.length > 0) {
-        const sitesFolder = folders[0]; // There should only be one Sites folder
-        setSitesFolderId(sitesFolder.id); // Store Sites folder ID for navigation control
-        setBreadcrumbs([]); // Don't show Sites in breadcrumbs
+      console.log('Found root folders:', rootFolders.length);
+
+      if (rootFolders && rootFolders.length > 0) {
+        const sitesFolder = rootFolders[0];
+        setSitesFolderId(sitesFolder.id);
+        console.log('Sites folder found:', sitesFolder.id);
+
+        // Immediately load the contents of the Sites folder
+        const [siteContents, documents] = await Promise.all([
+          dmsProvider.getFolders(sitesFolder.id),
+          dmsProvider.getDocuments(sitesFolder.id)
+        ]);
+
+        console.log('Loaded site contents:', siteContents.length, 'folders,', documents.length, 'documents');
+
+        // Format all items
+        const formattedItems: BrowseItem[] = [
+          ...siteContents.map(folder => ({
+            id: folder.id,
+            type: 'folder' as const,
+            data: folder
+          })),
+          ...documents.map(document => ({
+            id: document.id,
+            type: 'file' as const,
+            data: document
+          }))
+        ];
+
+        // Update state
+        setItems(formattedItems);
+        setBreadcrumbs([]); // Keep breadcrumbs empty at Sites level
         setCurrentFolderId(sitesFolder.id);
+        
+        // Ensure loading state is cleared
+        setIsLoading(false);
+        setError(null);
       } else {
         console.warn('Sites folder not found');
         setError('Sites folder not found. Please contact your administrator.');
       }
     } catch (err) {
       console.error('Failed to find Sites folder:', err);
-      throw err;
+      setError(err instanceof Error ? err.message : 'Failed to initialize browser');
+      setIsLoading(false);
     }
   };
 
   // Load folder contents whenever currentFolderId changes
   useEffect(() => {
-    if (provider && currentFolderId) {
+    if (provider && currentFolderId && currentFolderId !== sitesFolderId) {
       loadCurrentFolder();
     }
   }, [provider, currentFolderId]);
 
   /**
    * Loads the contents of the current folder
-   * Fetches both folders and documents concurrently for efficiency
    */
   const loadCurrentFolder = async () => {
     if (!provider) return;
@@ -165,7 +213,7 @@ const BrowseScreen = () => {
 
       console.log('Loading folder:', currentFolderId);
 
-      // Fetch folders and documents in parallel
+      // Fetch both folders and documents concurrently
       const [folders, documents] = await Promise.all([
         provider.getFolders(currentFolderId),
         provider.getDocuments(currentFolderId)
@@ -201,19 +249,79 @@ const BrowseScreen = () => {
    * Updates breadcrumbs and loads the selected folder contents
    */
   const handleFolderPress = async (folder: Folder) => {
-    console.log('Folder pressed:', folder.id, folder.name);
+    console.log('Folder press - Starting navigation:', {
+      folderId: folder.id,
+      folderName: folder.name,
+      currentBreadcrumbs: breadcrumbs.map(b => ({id: b.id, name: b.name})),
+      isSitesFolder: folder.id === sitesFolderId,
+      parentId: folder.parentId
+    });
     
-    // Update breadcrumbs first
-    const newBreadcrumbs = [...breadcrumbs, folder];
-    setBreadcrumbs(newBreadcrumbs);
+    setIsLoading(true);
     
-    // Then update current folder ID
-    setCurrentFolderId(folder.id);
+    try {
+      // Load the contents of the clicked folder
+      const [folders, documents] = await Promise.all([
+        provider!.getFolders(folder.id),
+        provider!.getDocuments(folder.id)
+      ]);
+
+      // Only skip breadcrumb update if this is the Sites folder itself
+      const isSitesFolder = folder.id === sitesFolderId;
+      console.log('Navigation check:', {
+        isSitesFolder,
+        folderId: folder.id,
+        sitesFolderId,
+        currentPath: folder.path
+      });
+
+      if (!isSitesFolder) {
+        // If we're already in a path, add to existing breadcrumbs
+        if (breadcrumbs.length > 0) {
+          const existingPath = breadcrumbs.map(b => b.id);
+          if (!existingPath.includes(folder.id)) {
+            const newBreadcrumbs = [...breadcrumbs, folder];
+            console.log('Adding to existing breadcrumbs:', {
+              oldLength: breadcrumbs.length,
+              newLength: newBreadcrumbs.length,
+              path: newBreadcrumbs.map(b => b.name).join(' > ')
+            });
+            setBreadcrumbs(newBreadcrumbs);
+          }
+        } else {
+          // Starting a new path
+          console.log('Starting new breadcrumb path with:', folder.name);
+          setBreadcrumbs([folder]);
+        }
+      } else {
+        console.log('Skipping breadcrumb update - at Sites level');
+        setBreadcrumbs([]);
+      }
+      
+      // Update current folder ID and items
+      setCurrentFolderId(folder.id);
+      setItems([
+        ...folders.map(f => ({
+          id: f.id,
+          type: 'folder' as const,
+          data: f
+        })),
+        ...documents.map(doc => ({
+          id: doc.id,
+          type: 'file' as const,
+          data: doc
+        }))
+      ]);
+    } catch (err) {
+      console.error('Failed to load folder contents:', err);
+      setError('Failed to load folder contents');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   /**
    * Handles file opening/downloading
-   * Creates a blob URL and opens it in a new window
    */
   const handleFilePress = async (file: Document) => {
     if (!provider) return;
@@ -230,8 +338,7 @@ const BrowseScreen = () => {
 
   /**
    * Handles back navigation
-   * Special handling for Alfresco to prevent going above Sites level
-   * and to hide Sites folder from breadcrumbs
+   * Prevents going above Sites level in Alfresco
    */
   const handleBackPress = () => {
     if (breadcrumbs.length > 0) {
@@ -241,10 +348,11 @@ const BrowseScreen = () => {
       
       // For Alfresco, prevent going above sites level
       if (providerType === DMS_PROVIDERS.ALFRESCO && newBreadcrumbs.length === 0) {
-        // Return to sites folder without adding it to breadcrumbs
+        // Return to sites folder contents without showing Sites in breadcrumbs
         if (sitesFolderId) {
           setBreadcrumbs([]);
           setCurrentFolderId(sitesFolderId);
+          loadCurrentFolder(); // Reload sites contents
           return;
         }
       }
@@ -260,7 +368,7 @@ const BrowseScreen = () => {
 
   /**
    * Handles home navigation
-   * For Alfresco, returns to Sites folder without showing it in breadcrumbs
+   * Returns to Sites contents in Alfresco
    */
   const handleHomePress = async () => {
     if (providerType === DMS_PROVIDERS.ALFRESCO && provider) {
@@ -272,7 +380,7 @@ const BrowseScreen = () => {
   };
 
   /**
-   * Renders a single list item (file or folder)
+   * Renders a list item (file or folder)
    */
   const renderItem = ({ item }: { item: BrowseItem }) => {
     if (item.type === 'file') {
@@ -293,93 +401,120 @@ const BrowseScreen = () => {
 
   /**
    * Renders the breadcrumb navigation
-   * Shows current folder hierarchy with Home button
+   * Handles platform-specific icons for iOS compatibility
    */
-  const renderBreadcrumbs = () => (
-    <View style={styles.breadcrumbs}>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.breadcrumbsContent}
-      >
-        <Button 
-          mode="text"
-          onPress={handleHomePress}
-          icon={() => <Home size={20} color={theme.colors.primary} />}
+  const renderBreadcrumbs = () => {
+    console.log('Rendering breadcrumbs:', {
+      hasBreadcrumbs: breadcrumbs.length > 0,
+      breadcrumbsPath: breadcrumbs.map(b => b.name).join(' > '),
+      currentFolderId,
+      sitesFolderId,
+      isAtSitesLevel: currentFolderId === sitesFolderId
+    });
+    
+    return (
+      <View style={styles.breadcrumbs}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.breadcrumbsContent}
+          contentContainerStyle={styles.breadcrumbsContainer}
         >
-          Home
-        </Button>
-        {breadcrumbs.map((folder, index) => (
-          <React.Fragment key={folder.id}>
-            <Text style={styles.breadcrumbSeparator}>/</Text>
+          <View style={styles.breadcrumbRow}>
             <Button 
+              key="home-button"
               mode="text"
-              onPress={() => {
-                const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
-                setBreadcrumbs(newBreadcrumbs);
-                setCurrentFolderId(folder.id);
-              }}
+              onPress={handleHomePress}
+              icon={() => Platform.select({
+                ios: <MaterialIcons name="home" size={20} color={theme.colors.primary} />,
+                default: <Home size={20} color={theme.colors.primary} />
+              })}
             >
-              {folder.name}
+              Home
             </Button>
-          </React.Fragment>
-        ))}
-      </ScrollView>
-    </View>
-  );
+            {breadcrumbs.map((folder, index) => (
+              <View key={`${folder.id}-${index}`} style={styles.breadcrumbItem}>
+                <Text style={styles.breadcrumbSeparator}>/</Text>
+                <Button 
+                  mode="text"
+                  onPress={() => {
+                    const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
+                    setBreadcrumbs(newBreadcrumbs);
+                    setCurrentFolderId(folder.id);
+                  }}
+                  style={styles.breadcrumbButton}
+                  labelStyle={styles.breadcrumbLabel}
+                >
+                  {folder.name}
+                </Button>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  };
 
   // Loading state
   if (isLoading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      </SafeAreaView>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <Button 
-          mode="contained" 
-          onPress={() => loadCurrentFolder()}
-          style={{ marginTop: theme.spacing.base }}
-        >
-          Retry
-        </Button>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Button 
+            mode="contained" 
+            onPress={() => loadCurrentFolder()}
+            style={{ marginTop: theme.spacing.base }}
+          >
+            Retry
+          </Button>
+        </View>
+      </SafeAreaView>
     );
   }
 
   // Main render
   return (
-    <View style={styles.container}>
-      {renderBreadcrumbs()}
-      {/* Only show back button when not at Sites level */}
-      {breadcrumbs.length > 0 && currentFolderId !== sitesFolderId && (
-        <Button 
-          mode="text"
-          onPress={handleBackPress}
-          icon={() => <ChevronLeft size={20} color={theme.colors.primary} />}
-          style={styles.backButton}
-        >
-          Back
-        </Button>
-      )}
-      <FlatList
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>This folder is empty</Text>
-          </View>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.contentContainer}>
+        {renderBreadcrumbs()}
+        {breadcrumbs.length > 0 && currentFolderId !== sitesFolderId && (
+          <Button 
+            mode="text"
+            onPress={handleBackPress}
+            icon={() => Platform.select({
+              ios: <MaterialIcons name="chevron-left" size={20} color={theme.colors.primary} />,
+              default: <ChevronLeft size={20} color={theme.colors.primary} />
+            })}
+            style={styles.backButton}
+          >
+            Back
+          </Button>
         )}
-      />
-    </View>
+        <FlatList
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>This folder is empty</Text>
+            </View>
+          )}
+        />
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -388,6 +523,9 @@ const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  contentContainer: {
+    flex: 1,
   },
   centerContainer: {
     flex: 1,
@@ -399,19 +537,39 @@ const styles = StyleSheet.create<Styles>({
     flexGrow: 1,
   },
   breadcrumbs: {
-    backgroundColor: theme.colors.surfaceBackground,
+    backgroundColor: '#f5f5f5',
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: '#e0e0e0',
+    minHeight: 54,
   },
   breadcrumbsContent: {
     flexDirection: 'row',
-    padding: theme.spacing.sm,
+  },
+  breadcrumbsContainer: {
+    flexGrow: 1,
+    alignItems: 'center',
+  },
+  breadcrumbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    height: 54,
+  },
+  breadcrumbItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  breadcrumbButton: {
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  breadcrumbLabel: {
+    fontSize: 14,
   },
   breadcrumbSeparator: {
-    marginHorizontal: theme.spacing.xs,
-    color: theme.colors.textSecondary,
-    alignSelf: 'center',
-    fontSize: theme.typography.sizes.base,
+    marginHorizontal: 4,
+    color: '#757575',
+    fontSize: 14,
   },
   backButton: {
     margin: theme.spacing.sm,
