@@ -2,7 +2,7 @@
 
 import { DMSProvider, ApiConfig } from './types';
 import { AlfrescoProvider } from './providers/alfresco/AlfrescoProvider';
-import { AngoraProvider } from './providers/angora';
+import { AngoraProvider } from './providers/angora/AngoraProvider';
 
 /**
  * Supported DMS provider types

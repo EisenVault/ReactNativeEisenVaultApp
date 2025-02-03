@@ -23,7 +23,7 @@ export * from './factory';
  * Note: Usually, you should use the factory instead of instantiating these directly
  */
 export * from './providers/alfresco/AlfrescoProvider';
-export * from './providers/angora';
+export * from './providers/angora/AngoraProvider';
 
 /**
  * Example usage of the DMS API:

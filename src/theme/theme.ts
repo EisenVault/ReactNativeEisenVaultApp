@@ -4,7 +4,6 @@ import { Platform } from 'react-native';
 
 /**
  * Core color palette
- * These are the base colors used throughout the application
  */
 export const colors = {
   // Primary colors
@@ -33,6 +32,17 @@ export const colors = {
   textSecondary: '#4b5563',
   textTertiary: '#9ca3af',
   textInverted: '#ffffff',
+
+  // UI colors
+  surface: '#ffffff',
+  surfaceVariant: '#f1f5f9',
+  surfaceDisabled: '#e2e8f0',
+  elevation: {
+    level0: '#ffffff',
+    level1: '#f8fafc',
+    level2: '#f1f5f9',
+    level3: '#e2e8f0',
+  },
 
   // Border colors
   border: '#e5e7eb',

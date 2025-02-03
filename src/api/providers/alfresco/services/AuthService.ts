@@ -233,6 +233,7 @@ export class AuthService extends BaseService {
      * Handles both web and mobile authentication flows
      */
     async login(username: string, password: string): Promise<AuthResponse> {
+        console.log("Inside Alfresco login ... username: ", username, " password: ", password);
         try {
             this.log.info('Starting login process');
             this.log.debug('Platform:', Platform.OS);

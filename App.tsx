@@ -6,7 +6,7 @@ import { Provider as ReduxProvider } from 'react-redux';
 import { SafeAreaProvider } from 'react-native-safe-area-context'; // Add this import
 import { store } from './src/store/store';
 import { AppNavigator } from './src/navigation/AppNavigator';
-import { LoginScreen } from './src/components/screens/LoginScreen';
+import  SetupWizard  from './src/components/screens/SetupWizard';
 
 /**
  * Root Application Component
@@ -30,7 +30,7 @@ export default function App() {
             <AppNavigator />
           ) : (
             // Show login screen when not authenticated
-            <LoginScreen 
+            <SetupWizard 
               onLoginSuccess={() => setIsAuthenticated(true)} 
             />
           )}
