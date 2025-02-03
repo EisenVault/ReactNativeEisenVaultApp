@@ -1,9 +1,4 @@
 // src/components/screens/BrowseScreen.tsx
-//
-// This component provides a browsing interface for document management systems (DMS).
-// For Alfresco, it directly shows the contents of the Sites folder, skipping the Sites
-// folder itself in the navigation hierarchy. It prevents navigation above the Sites level
-// and provides a clean breadcrumb trail starting from the site contents.
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -28,30 +23,22 @@ import { ChevronLeft, Home } from 'lucide-react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import theme from '../../theme/theme';
 
-// Define supported provider types
+// Type Definitions
 type ProviderType = 'alfresco' | 'angora';
 
-// Constants for DMS providers and their specific configurations
-const DMS_PROVIDERS = {
-  ALFRESCO: 'alfresco' as ProviderType,
-  ANGORA: 'angora' as ProviderType,
-};
-
-// Alfresco-specific constants
-const ALFRESCO_CONSTANTS = {
-  ROOT_ID: '-root-',           // Root folder reference
-  SITES_NODE_TYPE: 'st:sites', // Alfresco Sites folder type
-  SITES_FOLDER_NAME: 'Sites'   // Display name for sites folder
+// Angora API configuration
+const ANGORA_API = {
+  DEPARTMENTS_ENDPOINT: 'departments',
+  CHILDREN_ENDPOINT: 'children',
+  FOLDERS_PARAM: 'only_folders=true'
 } as const;
 
-// Interface for items displayed in the browse list
 interface BrowseItem {
   id: string;
   type: 'file' | 'folder';
   data: Document | Folder;
 }
 
-// Style types for type safety
 interface Styles {
   container: ViewStyle;
   contentContainer: ViewStyle;
@@ -70,29 +57,25 @@ interface Styles {
   emptyContainer: ViewStyle;
   emptyText: TextStyle;
 }
-
-const BrowseScreen = () => {
-  // State management
-  const [isLoading, setIsLoading] = useState(true);
+const BrowseScreen: React.FC = () => {
+  // State management with proper typing
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<BrowseItem[]>([]);
-  const [currentFolderId, setCurrentFolderId] = useState<string>(ALFRESCO_CONSTANTS.ROOT_ID);
+  const [currentFolderId, setCurrentFolderId] = useState<string>('');
   const [breadcrumbs, setBreadcrumbs] = useState<Folder[]>([]);
   const [provider, setProvider] = useState<DMSProvider | null>(null);
-  const [providerType, setProviderType] = useState<ProviderType>(DMS_PROVIDERS.ALFRESCO);
-  // Track Sites folder ID to handle navigation and UI visibility
-  const [sitesFolderId, setSitesFolderId] = useState<string | null>(null);
 
-  // Get authentication state from Redux store
+  // Redux state
   const { userProfile, isAuthenticated, serverUrl, authToken } = useSelector(
     (state: RootState) => state.auth
   );
 
-  // Initialize provider and navigate to initial folder
+  // Initialize provider
   useEffect(() => {
     let mounted = true;
     
-    const initializeAndNavigate = async () => {
+    const initializeProvider = async (): Promise<void> => {
       try {
         if (!serverUrl || !authToken) {
           setError('Authentication data missing. Please log in again.');
@@ -104,16 +87,12 @@ const BrowseScreen = () => {
           timeout: 30000,
         };
     
-        const dmsProvider = DMSFactory.createProvider(providerType, config);
+        const dmsProvider = DMSFactory.createProvider('angora', config);
         dmsProvider.setToken(authToken);
         
         if (mounted) {
           setProvider(dmsProvider);
-          
-          // For Alfresco, navigate directly to sites contents
-          if (providerType === DMS_PROVIDERS.ALFRESCO) {
-            await findAndNavigateToSites(dmsProvider);
-          }
+          await loadInitialContent(dmsProvider);
         }
       } catch (err) {
         console.error('Provider initialization error:', err);
@@ -125,85 +104,53 @@ const BrowseScreen = () => {
 
     if (isAuthenticated && !provider) {
       setIsLoading(true);
-      initializeAndNavigate();
+      initializeProvider();
     }
 
     return () => {
       mounted = false;
     };
-  }, [isAuthenticated, serverUrl, authToken, providerType]);
+  }, [isAuthenticated, serverUrl, authToken]);
 
-  /**
-   * Finds the Sites folder and loads its contents directly
-   * Handles platform-specific navigation behavior
-   */
-  const findAndNavigateToSites = async (dmsProvider: DMSProvider) => {
+  // Load initial content
+  const loadInitialContent = async (dmsProvider: DMSProvider): Promise<void> => {
     try {
-      console.log('Finding sites folder...');
-      
-      // First get the Sites folder using the nodeType filter
-      const rootFolders = await dmsProvider.getFolders(ALFRESCO_CONSTANTS.ROOT_ID, {
-        nodeType: ALFRESCO_CONSTANTS.SITES_NODE_TYPE
+      // For Angora, get root level departments
+      const rootFolders = await dmsProvider.getFolders('', { 
+        nodeType: ANGORA_API.DEPARTMENTS_ENDPOINT 
       });
+      const documents: Document[] = []; // Root level has no documents in Angora
 
-      console.log('Found root folders:', rootFolders.length);
+      const formattedItems: BrowseItem[] = [
+        ...rootFolders.map(folder => ({
+          id: folder.id,
+          type: 'folder' as const,
+          data: folder
+        })),
+        ...documents.map(document => ({
+          id: document.id,
+          type: 'file' as const,
+          data: document
+        }))
+      ];
 
-      if (rootFolders && rootFolders.length > 0) {
-        const sitesFolder = rootFolders[0];
-        setSitesFolderId(sitesFolder.id);
-        console.log('Sites folder found:', sitesFolder.id);
-
-        // Immediately load the contents of the Sites folder
-        const [siteContents, documents] = await Promise.all([
-          dmsProvider.getFolders(sitesFolder.id),
-          dmsProvider.getDocuments(sitesFolder.id)
-        ]);
-
-        console.log('Loaded site contents:', siteContents.length, 'folders,', documents.length, 'documents');
-
-        // Format all items
-        const formattedItems: BrowseItem[] = [
-          ...siteContents.map(folder => ({
-            id: folder.id,
-            type: 'folder' as const,
-            data: folder
-          })),
-          ...documents.map(document => ({
-            id: document.id,
-            type: 'file' as const,
-            data: document
-          }))
-        ];
-
-        // Update state
-        setItems(formattedItems);
-        setBreadcrumbs([]); // Keep breadcrumbs empty at Sites level
-        setCurrentFolderId(sitesFolder.id);
-        
-        // Ensure loading state is cleared
-        setIsLoading(false);
-        setError(null);
-      } else {
-        console.warn('Sites folder not found');
-        setError('Sites folder not found. Please contact your administrator.');
-      }
+      setItems(formattedItems);
+      setIsLoading(false);
+      setError(null);
     } catch (err) {
-      console.error('Failed to find Sites folder:', err);
-      setError(err instanceof Error ? err.message : 'Failed to initialize browser');
+      console.error('Failed to load initial content:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load content');
       setIsLoading(false);
     }
   };
-
-  // Load folder contents whenever currentFolderId changes
+  // Load content when folder changes
   useEffect(() => {
-    if (provider && currentFolderId && currentFolderId !== sitesFolderId) {
+    if (provider && currentFolderId) {
       loadCurrentFolder();
     }
   }, [provider, currentFolderId]);
 
-  /**
-   * Loads the contents of the current folder
-   */
+  // Load folder contents
   const loadCurrentFolder = async () => {
     if (!provider) return;
 
@@ -213,15 +160,19 @@ const BrowseScreen = () => {
 
       console.log('Loading folder:', currentFolderId);
 
+      // For Angora, we use departments endpoint
+      const path = currentFolderId 
+        ? `departments/${currentFolderId}/children`
+        : 'departments';
+
       // Fetch both folders and documents concurrently
       const [folders, documents] = await Promise.all([
-        provider.getFolders(currentFolderId),
-        provider.getDocuments(currentFolderId)
+        provider.getFolders(path),
+        provider.getDocuments(path)
       ]);
 
-      console.log('Loaded folders:', folders.length, 'documents:', documents.length);
+      console.log('Loaded:', { folderCount: folders.length, documentCount: documents.length });
 
-      // Format items for display
       const formattedItems: BrowseItem[] = [
         ...folders.map(folder => ({
           id: folder.id,
@@ -244,86 +195,27 @@ const BrowseScreen = () => {
     }
   };
 
-  /**
-   * Handles folder navigation
-   * Updates breadcrumbs and loads the selected folder contents
-   */
-  const handleFolderPress = async (folder: Folder) => {
-    console.log('Folder press - Starting navigation:', {
-      folderId: folder.id,
-      folderName: folder.name,
-      currentBreadcrumbs: breadcrumbs.map(b => ({id: b.id, name: b.name})),
-      isSitesFolder: folder.id === sitesFolderId,
-      parentId: folder.parentId
-    });
-    
-    setIsLoading(true);
-    
+  // Handle folder navigation
+  const handleFolderPress = async (folder: Folder): Promise<void> => {
     try {
-      // Load the contents of the clicked folder
-      const [folders, documents] = await Promise.all([
-        provider!.getFolders(folder.id),
-        provider!.getDocuments(folder.id)
-      ]);
-
-      // Only skip breadcrumb update if this is the Sites folder itself
-      const isSitesFolder = folder.id === sitesFolderId;
-      console.log('Navigation check:', {
-        isSitesFolder,
-        folderId: folder.id,
-        sitesFolderId,
-        currentPath: folder.path
-      });
-
-      if (!isSitesFolder) {
-        // If we're already in a path, add to existing breadcrumbs
-        if (breadcrumbs.length > 0) {
-          const existingPath = breadcrumbs.map(b => b.id);
-          if (!existingPath.includes(folder.id)) {
-            const newBreadcrumbs = [...breadcrumbs, folder];
-            console.log('Adding to existing breadcrumbs:', {
-              oldLength: breadcrumbs.length,
-              newLength: newBreadcrumbs.length,
-              path: newBreadcrumbs.map(b => b.name).join(' > ')
-            });
-            setBreadcrumbs(newBreadcrumbs);
-          }
-        } else {
-          // Starting a new path
-          console.log('Starting new breadcrumb path with:', folder.name);
-          setBreadcrumbs([folder]);
+      setCurrentFolderId(folder.id);
+      
+      if (breadcrumbs.length > 0) {
+        const existingPath = breadcrumbs.map(b => b.id);
+        if (!existingPath.includes(folder.id)) {
+          setBreadcrumbs([...breadcrumbs, folder]);
         }
       } else {
-        console.log('Skipping breadcrumb update - at Sites level');
-        setBreadcrumbs([]);
+        setBreadcrumbs([folder]);
       }
-      
-      // Update current folder ID and items
-      setCurrentFolderId(folder.id);
-      setItems([
-        ...folders.map(f => ({
-          id: f.id,
-          type: 'folder' as const,
-          data: f
-        })),
-        ...documents.map(doc => ({
-          id: doc.id,
-          type: 'file' as const,
-          data: doc
-        }))
-      ]);
     } catch (err) {
       console.error('Failed to load folder contents:', err);
       setError('Failed to load folder contents');
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  /**
-   * Handles file opening/downloading
-   */
-  const handleFilePress = async (file: Document) => {
+  // Handle file operations
+  const handleFilePress = async (file: Document): Promise<void> => {
     if (!provider) return;
 
     try {
@@ -336,53 +228,30 @@ const BrowseScreen = () => {
     }
   };
 
-  /**
-   * Handles back navigation
-   * Prevents going above Sites level in Alfresco
-   */
-  const handleBackPress = () => {
+  // Navigation handlers
+  const handleBackPress = (): void => {
     if (breadcrumbs.length > 0) {
       const newBreadcrumbs = [...breadcrumbs];
       newBreadcrumbs.pop();
       setBreadcrumbs(newBreadcrumbs);
       
-      // For Alfresco, prevent going above sites level
-      if (providerType === DMS_PROVIDERS.ALFRESCO && newBreadcrumbs.length === 0) {
-        // Return to sites folder contents without showing Sites in breadcrumbs
-        if (sitesFolderId) {
-          setBreadcrumbs([]);
-          setCurrentFolderId(sitesFolderId);
-          loadCurrentFolder(); // Reload sites contents
-          return;
-        }
-      }
-      
-      // Set current folder ID to parent folder
       const parentFolderId = newBreadcrumbs.length > 0 
         ? newBreadcrumbs[newBreadcrumbs.length - 1].id 
-        : sitesFolderId || ALFRESCO_CONSTANTS.ROOT_ID;
+        : '';
       
       setCurrentFolderId(parentFolderId);
     }
   };
 
-  /**
-   * Handles home navigation
-   * Returns to Sites contents in Alfresco
-   */
-  const handleHomePress = async () => {
-    if (providerType === DMS_PROVIDERS.ALFRESCO && provider) {
-      await findAndNavigateToSites(provider);
-    } else {
-      setBreadcrumbs([]);
-      setCurrentFolderId(ALFRESCO_CONSTANTS.ROOT_ID);
+  const handleHomePress = async (): Promise<void> => {
+    setBreadcrumbs([]);
+    setCurrentFolderId('');
+    if (provider) {
+      await loadInitialContent(provider);
     }
   };
-
-  /**
-   * Renders a list item (file or folder)
-   */
-  const renderItem = ({ item }: { item: BrowseItem }) => {
+  // Render list items
+  const renderItem = ({ item }: { item: BrowseItem }): React.ReactElement => {
     if (item.type === 'file') {
       return (
         <FileItem 
@@ -399,19 +268,8 @@ const BrowseScreen = () => {
     );
   };
 
-  /**
-   * Renders the breadcrumb navigation
-   * Handles platform-specific icons for iOS compatibility
-   */
-  const renderBreadcrumbs = () => {
-    console.log('Rendering breadcrumbs:', {
-      hasBreadcrumbs: breadcrumbs.length > 0,
-      breadcrumbsPath: breadcrumbs.map(b => b.name).join(' > '),
-      currentFolderId,
-      sitesFolderId,
-      isAtSitesLevel: currentFolderId === sitesFolderId
-    });
-    
+  // Render breadcrumb navigation
+  const renderBreadcrumbs = (): React.ReactElement => {
     return (
       <View style={styles.breadcrumbs}>
         <ScrollView 
@@ -489,7 +347,7 @@ const BrowseScreen = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.contentContainer}>
         {renderBreadcrumbs()}
-        {breadcrumbs.length > 0 && currentFolderId !== sitesFolderId && (
+        {breadcrumbs.length > 0 && (
           <Button 
             mode="text"
             onPress={handleBackPress}
@@ -517,7 +375,6 @@ const BrowseScreen = () => {
     </SafeAreaView>
   );
 };
-
 // Styles
 const styles = StyleSheet.create<Styles>({
   container: {

@@ -1,11 +1,32 @@
 // src/api/providers/angora/services/BaseService.ts
 
+import { Platform } from 'react-native';
 import { ApiUtils } from '../utils/ApiUtils';
 
 /**
- * Base class for all Angora service implementations
+ * Common headers configuration
  */
-export class BaseService {
+const COMMON_HEADERS = {
+    ACCEPT: 'application/json',
+    CONTENT_TYPE: 'application/json',
+    LOCALE: 'en',
+    PORTAL: 'web'
+} as const;
+
+interface RequestHeaders {
+    'Accept': string;
+    'Content-Type': string;
+    'Accept-Language': string;
+    'Authorization'?: string;
+    'x-portal': string;
+    'x-service-name'?: string;
+}
+
+/**
+ * Base class for all Angora service implementations
+ * Provides common functionality, error handling, and logging
+ */
+export abstract class BaseService {
     constructor(
         protected readonly baseUrl: string,
         protected readonly apiUtils: ApiUtils
@@ -17,28 +38,39 @@ export class BaseService {
     }
 
     /**
-     * Validates the base URL format and domain
+     * Creates standard headers for API requests
+     * @param serviceName - Optional service name for x-service-name header
+     */
+    protected createHeaders(serviceName?: string): RequestHeaders {
+        const headers: RequestHeaders = {
+            'Accept': COMMON_HEADERS.ACCEPT,
+            'Content-Type': COMMON_HEADERS.CONTENT_TYPE,
+            'Accept-Language': COMMON_HEADERS.LOCALE,
+            'x-portal': COMMON_HEADERS.PORTAL,
+        };
+
+        // Add authorization if available
+        const token = this.apiUtils.getToken();
+        if (token) {
+            headers['Authorization'] = token;
+        }
+
+        // Add service name if provided
+        if (serviceName) {
+            headers['x-service-name'] = serviceName;
+        }
+
+        return headers;
+    }
+
+    /**
+     * Validates the base URL format
      */
     private validateBaseUrl(url: string): void {
         try {
-            const parsedUrl = new URL(url);
-            
-            // Validate the domain is from the allowed list
-            const validDomains = [
-                'angorastage.in',
-                'eisenvault.localapp'
-            ];
-            
-            const domain = parsedUrl.hostname.split('.').slice(-2).join('.');
-            if (!validDomains.some(d => parsedUrl.hostname.endsWith(d))) {
-                throw new Error(`Invalid domain. Must be one of: ${validDomains.join(', ')}`);
-            }
-
+            new URL(url);
         } catch (error) {
-            if (error instanceof Error) {
-                throw new Error(`Invalid base URL: ${error.message}`);
-            }
-            throw new Error('Invalid base URL provided');
+            throw new Error(`Invalid base URL provided: ${url}`);
         }
     }
 
@@ -57,64 +89,36 @@ export class BaseService {
     /**
      * Makes an authenticated request with proper error handling
      */
-    protected async makeCustomRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+    protected async makeCustomRequest<T>(
+        path: string,
+        options: RequestInit & { serviceName?: string } = {}
+    ): Promise<T> {
         try {
-            const url = this.buildUrl(path);
-            this.logOperation('Making request to:', { url, method: options.method });
-
             // Create timeout with abort controller
             const controller = new AbortController();
             const timeoutId = setTimeout(() => {
                 controller.abort();
             }, 30000);
 
-            const response = await fetch(url, {
+            // Get headers with proper locale and service name
+            const headers = {
+                ...this.createHeaders(options.serviceName),
+                ...options.headers
+            };
+
+            const response = await fetch(this.buildUrl(path), {
                 ...options,
+                headers,
                 signal: controller.signal
             });
 
             clearTimeout(timeoutId);
 
-            const contentType = response.headers.get('content-type');
-            const isJson = contentType?.includes('application/json');
-            
-            // Always try to get the response text first
-            const responseText = await response.text();
-            
-            // Parse error response
             if (!response.ok) {
-                let errorMessage = `HTTP Error: ${response.status}`;
-                if (responseText) {
-                    try {
-                        if (isJson) {
-                            const errorData = JSON.parse(responseText);
-                            errorMessage = errorData.message || 
-                                         errorData.error || 
-                                         errorData.error_description ||
-                                         errorMessage;
-                        } else {
-                            errorMessage = responseText;
-                        }
-                    } catch {
-                        errorMessage = responseText;
-                    }
-                }
-                throw new Error(errorMessage);
+                throw await this.handleErrorResponse(response);
             }
 
-            // Parse successful response
-            let data: T;
-            if (isJson && responseText) {
-                try {
-                    data = JSON.parse(responseText);
-                } catch (error) {
-                    throw new Error('Invalid JSON response from server');
-                }
-            } else {
-                data = responseText as unknown as T;
-            }
-
-            return data;
+            return this.handleSuccessResponse<T>(response);
 
         } catch (error) {
             this.logError('Request failed:', error);
@@ -123,41 +127,51 @@ export class BaseService {
     }
 
     /**
+     * Handles successful API response
+     */
+    private async handleSuccessResponse<T>(response: Response): Promise<T> {
+        try {
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            throw new Error('Failed to parse response JSON');
+        }
+    }
+
+    /**
+     * Handles error response from API
+     */
+    private async handleErrorResponse(response: Response): Promise<Error> {
+        try {
+            const errorData = await response.json();
+            
+            // Handle Angora specific error format
+            if (errorData.errors?.length > 0) {
+                const error = errorData.errors[0];
+                return new Error(error.message || 'Unknown error occurred');
+            }
+
+            return new Error(`HTTP Error: ${response.status}`);
+        } catch (error) {
+            return new Error(`HTTP Error: ${response.status}`);
+        }
+    }
+
+    /**
      * Logs operations with consistent format
      */
     protected logOperation(operation: string, details?: any): void {
-        const sanitizedDetails = this.sanitizeLogData(details || {});
-        console.log(`[${this.constructor.name}] ${operation}`, sanitizedDetails);
+        console.log(`[${this.constructor.name}] ${operation}`, details || '');
     }
 
     /**
      * Logs errors with consistent format
      */
     protected logError(message: string, error?: any): void {
-        console.error(`[${this.constructor.name}] ${message}`, error);
+        console.error(`[${this.constructor.name}] ${message}`, error || '');
         if (error instanceof Error) {
             console.error('Stack trace:', error.stack);
         }
-    }
-
-    /**
-     * Sanitizes sensitive data for logging
-     */
-    private sanitizeLogData(data: any): any {
-        if (!data) return data;
-
-        const sanitized = { ...data };
-        const sensitiveFields = ['password', 'token', 'authorization', 'secret'];
-
-        Object.keys(sanitized).forEach(key => {
-            if (sensitiveFields.includes(key.toLowerCase())) {
-                sanitized[key] = '***REDACTED***';
-            } else if (typeof sanitized[key] === 'object') {
-                sanitized[key] = this.sanitizeLogData(sanitized[key]);
-            }
-        });
-
-        return sanitized;
     }
 
     /**

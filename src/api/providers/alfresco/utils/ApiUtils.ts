@@ -38,7 +38,7 @@ export class ApiUtils {
 
     async fetch(url: string, options: RequestInit = {}): Promise<Response> {
         try {
-            this.logOperation('Fetching', { 
+            this.logOperation('Fetching from Alfresco', { 
                 url, 
                 method: options.method || 'GET',
                 hasToken: !!this.token

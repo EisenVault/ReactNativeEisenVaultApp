@@ -5,6 +5,25 @@ import { ApiUtils } from '../utils/ApiUtils';
 import { AuthResponse, UserProfile } from '../../../types';
 import { Platform } from 'react-native';
 
+// Type definitions for requests
+interface LoginRequest {
+    email: string;
+    password: string;
+}
+
+interface LoginResponse {
+    data: {
+        token: string;
+        user: {
+            id: string;
+            firstName?: string;
+            lastName?: string;
+            email?: string;
+            displayName?: string;
+        };
+    };
+}
+
 export class AuthService extends BaseService {
     constructor(baseUrl: string, apiUtils: ApiUtils) {
         super(baseUrl, apiUtils);
@@ -12,64 +31,28 @@ export class AuthService extends BaseService {
 
     /**
      * Main login method
-     * Matches exactly the successful Postman request format
+     * Handles both web and mobile authentication flows
      */
     async login(username: string, password: string): Promise<AuthResponse> {
         try {
-            this.logOperation('Starting login process', { 
-                platform: Platform.OS,
-                username
-            });
+            this.logOperation('Starting login process', { platform: Platform.OS });
 
-            // Headers must be in exact order as Postman
-            const headers = {
-                'x-portal': 'web',
-                'x-service-name': 'service-user',
-                'Content-Type': 'application/json',
-                'Accept-Language': 'en'
-            };
-
-            // Request body matching Postman
-            const requestBody = {
+            const loginPayload: LoginRequest = {
                 email: username,
                 password: password
             };
-            console.log('Request body:', JSON.stringify(requestBody));
-            const response = await this.makeCustomRequest<{
-                data?: {
-                    token: string;
-                    user: {
-                        id: string;
-                        firstName?: string;
-                        lastName?: string;
-                        email?: string;
-                    };
-                };
-                error?: {
-                    message?: string;
-                    details?: string;
-                };
-                message?: string;
-            }>(
+
+            const response = await this.makeCustomRequest<LoginResponse>(
                 'auth/login',
                 {
                     method: 'POST',
-                    headers,
-                    body: JSON.stringify(requestBody)
+                    serviceName: 'service-auth',
+                    body: JSON.stringify(loginPayload)
                 }
             );
 
-            this.logOperation('Received response', { 
-                hasData: !!response?.data,
-                hasError: !!response?.error 
-            });
-
-            if (response?.error) {
-                throw new Error(response.error.message || response.error.details || 'Authentication failed');
-            }
-
             if (!response?.data?.token) {
-                throw new Error('Invalid authentication response: Missing token');
+                throw new Error('Invalid authentication response');
             }
 
             const token = response.data.token;
@@ -80,15 +63,12 @@ export class AuthService extends BaseService {
                 id: response.data.user.id,
                 firstName: response.data.user.firstName || '',
                 lastName: response.data.user.lastName || '',
-                displayName: [
-                    response.data.user.firstName,
-                    response.data.user.lastName
-                ].filter(Boolean).join(' ') || username,
+                displayName: response.data.user.displayName || 
+                           `${response.data.user.firstName} ${response.data.user.lastName}`.trim() ||
+                           username,
                 email: response.data.user.email || '',
                 username: username
             };
-
-            this.logOperation('Login successful', { userId: userProfile.id });
 
             return {
                 token,
@@ -100,24 +80,13 @@ export class AuthService extends BaseService {
             this.apiUtils.setToken(null);
 
             if (error instanceof Error) {
-                // Specific error handling based on error message
-                const message = error.message.toLowerCase();
-                
-                if (message.includes('invalid credentials') || 
-                    message.includes('user not found')) {
+                if (error.message.includes('timeout')) {
+                    throw this.createError('Request timeout: The server is taking too long to respond', error);
+                } else if (error.message.includes('Network request failed')) {
+                    throw this.createError('Network error: Unable to connect to the server', error);
+                } else if (error.message.includes('401')) {
                     throw this.createError('Invalid username or password', error);
                 }
-                
-                if (message.includes('timeout')) {
-                    throw this.createError('Request timeout: The server is taking too long to respond', error);
-                }
-                
-                if (message.includes('network')) {
-                    throw this.createError('Network error: Unable to connect to the server', error);
-                }
-                
-                // Return the original error message from the server if available
-                throw this.createError(error.message, error);
             }
 
             throw this.createError('Authentication failed', error);
@@ -126,6 +95,7 @@ export class AuthService extends BaseService {
 
     /**
      * Handles user logout
+     * Cleans up any existing sessions and tokens
      */
     async logout(): Promise<void> {
         try {
@@ -136,25 +106,18 @@ export class AuthService extends BaseService {
                 return;
             }
 
-            // Headers matching Postman collection
-            const headers = {
-                'x-portal': 'web',
-                'x-service-name': 'service-user',
-                'Content-Type': 'application/json',
-                'Authorization': this.apiUtils.getToken()!
-            };
-
             try {
                 await this.makeCustomRequest(
                     'auth/logout',
                     {
                         method: 'POST',
-                        headers
+                        serviceName: 'service-auth'
                     }
                 );
                 this.logOperation('Logout request successful');
             } catch (error) {
                 this.logError('Logout request failed', error);
+                // Continue with cleanup even if the request fails
             }
 
             this.apiUtils.setToken(null);
@@ -167,6 +130,28 @@ export class AuthService extends BaseService {
         }
     }
 
+    /**
+     * Verifies the JWT token
+     */
+    async verifyToken(token: string): Promise<boolean> {
+        try {
+            await this.makeCustomRequest(
+                'auth/token',
+                {
+                    method: 'POST',
+                    serviceName: 'service-auth',
+                    body: JSON.stringify({ token })
+                }
+            );
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * Checks if the user is currently authenticated
+     */
     isAuthenticated(): boolean {
         return this.apiUtils.isAuthenticated();
     }

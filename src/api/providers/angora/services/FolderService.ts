@@ -5,9 +5,14 @@ import { Folder } from '../../../types';
 import { ApiUtils } from '../utils/ApiUtils';
 import { MapperUtils } from '../utils/MapperUtils';
 
-/**
- * Interface for Angora API folder response
- */
+const ENDPOINTS = {
+    DEPARTMENTS: 'departments',
+    FOLDERS: 'folders',
+    CHILDREN: 'children',
+    STATS: 'stats',
+    PATH: 'path'
+} as const;
+
 interface AngoraFolderResponse {
     data: {
         id: string;
@@ -23,9 +28,6 @@ interface AngoraFolderResponse {
     };
 }
 
-/**
- * Interface for Angora API folders list response
- */
 interface AngoraFoldersResponse {
     data: Array<AngoraFolderResponse['data']>;
     pagination?: {
@@ -35,36 +37,17 @@ interface AngoraFoldersResponse {
     };
 }
 
-/**
- * Interface for folder creation payload
- */
 interface CreateFolderPayload {
     name: string;
     parent_id: string;
     description?: string;
 }
 
-/**
- * FolderService handles all folder-related operations for the Angora DMS
- * Includes methods for retrieving, creating, and managing folders
- */
 export class FolderService extends BaseService {
-    // Constants for service configuration
-    private static readonly SERVICE_HEADERS = {
-        PORTAL: 'web',
-        SERVICE_NAME: 'service-file'
-    } as const;
-
     constructor(baseUrl: string, apiUtils: ApiUtils) {
         super(baseUrl, apiUtils);
     }
 
-    /**
-     * Retrieve all folders within a specified parent folder
-     * @param parentFolderId - ID of the parent folder
-     * @param filters - Optional filters for the query
-     * @returns Promise resolving to array of Folder objects
-     */
     async getFolders(
         parentFolderId: string, 
         filters?: { nodeType?: string }
@@ -80,13 +63,14 @@ export class FolderService extends BaseService {
                 queryParams.append('nodeType', filters.nodeType);
             }
 
+            const path = parentFolderId ? 
+                `${ENDPOINTS.DEPARTMENTS}/${parentFolderId}/${ENDPOINTS.CHILDREN}` :
+                ENDPOINTS.DEPARTMENTS;
+
             const response = await this.makeCustomRequest<AngoraFoldersResponse>(
-                `api/departments/${parentFolderId}/children?${queryParams}`,
+                `${path}?${queryParams}`,
                 {
-                    headers: {
-                        'x-portal': FolderService.SERVICE_HEADERS.PORTAL,
-                        'x-service-name': FolderService.SERVICE_HEADERS.SERVICE_NAME
-                    }
+                    serviceName: 'service-file'
                 }
             );
 
@@ -104,22 +88,14 @@ export class FolderService extends BaseService {
         }
     }
 
-    /**
-     * Get a specific folder by ID
-     * @param folderId - ID of the folder to retrieve
-     * @returns Promise resolving to Folder object
-     */
     async getFolder(folderId: string): Promise<Folder> {
         try {
             this.logOperation('getFolder', { folderId });
 
             const response = await this.makeCustomRequest<AngoraFolderResponse>(
-                `api/folders/${folderId}`,
+                `${ENDPOINTS.FOLDERS}/${folderId}`,
                 {
-                    headers: {
-                        'x-portal': FolderService.SERVICE_HEADERS.PORTAL,
-                        'x-service-name': FolderService.SERVICE_HEADERS.SERVICE_NAME
-                    }
+                    serviceName: 'service-file'
                 }
             );
 
@@ -137,13 +113,6 @@ export class FolderService extends BaseService {
         }
     }
 
-    /**
-     * Create a new folder
-     * @param parentFolderId - ID of the parent folder
-     * @param name - Name for the new folder
-     * @param description - Optional description for the folder
-     * @returns Promise resolving to created Folder object
-     */
     async createFolder(
         parentFolderId: string, 
         name: string,
@@ -159,14 +128,10 @@ export class FolderService extends BaseService {
             };
 
             const response = await this.makeCustomRequest<AngoraFolderResponse>(
-                'api/folders',
+                ENDPOINTS.FOLDERS,
                 {
                     method: 'POST',
-                    headers: {
-                        'x-portal': FolderService.SERVICE_HEADERS.PORTAL,
-                        'x-service-name': FolderService.SERVICE_HEADERS.SERVICE_NAME,
-                        'Content-Type': 'application/json'
-                    },
+                    serviceName: 'service-file',
                     body: JSON.stringify(payload)
                 }
             );
@@ -185,10 +150,6 @@ export class FolderService extends BaseService {
         }
     }
 
-    /**
-     * Delete one or more folders
-     * @param folderIds - Single folder ID or array of folder IDs to delete
-     */
     async deleteFolder(folderIds: string | string[]): Promise<void> {
         try {
             const ids = Array.isArray(folderIds) ? folderIds : [folderIds];
@@ -199,13 +160,10 @@ export class FolderService extends BaseService {
             });
 
             await this.makeCustomRequest(
-                `api/folders?${queryParams}`,
+                `${ENDPOINTS.FOLDERS}?${queryParams}`,
                 {
                     method: 'DELETE',
-                    headers: {
-                        'x-portal': FolderService.SERVICE_HEADERS.PORTAL,
-                        'x-service-name': FolderService.SERVICE_HEADERS.SERVICE_NAME
-                    }
+                    serviceName: 'service-file'
                 }
             );
 
@@ -216,11 +174,6 @@ export class FolderService extends BaseService {
         }
     }
 
-    /**
-     * Get folder statistics
-     * @param folderId - ID of the folder
-     * @returns Promise resolving to folder stats
-     */
     async getFolderStats(folderId: string): Promise<{
         totalItems: number;
         totalSize: number;
@@ -234,12 +187,9 @@ export class FolderService extends BaseService {
                     total_size: number;
                 };
             }>(
-                `api/folders/${folderId}/stats`,
+                `${ENDPOINTS.FOLDERS}/${folderId}/${ENDPOINTS.STATS}`,
                 {
-                    headers: {
-                        'x-portal': FolderService.SERVICE_HEADERS.PORTAL,
-                        'x-service-name': FolderService.SERVICE_HEADERS.SERVICE_NAME
-                    }
+                    serviceName: 'service-file'
                 }
             );
 
@@ -257,11 +207,6 @@ export class FolderService extends BaseService {
         }
     }
 
-    /**
-     * Check if a folder exists
-     * @param folderId - ID of the folder to check
-     * @returns Promise resolving to boolean indicating existence
-     */
     async folderExists(folderId: string): Promise<boolean> {
         try {
             await this.getFolder(folderId);
@@ -274,11 +219,6 @@ export class FolderService extends BaseService {
         }
     }
 
-    /**
-     * Get the full path to a folder
-     * @param folderId - ID of the folder
-     * @returns Promise resolving to array of parent folders
-     */
     async getFolderPath(folderId: string): Promise<Folder[]> {
         try {
             this.logOperation('getFolderPath', { folderId });
@@ -286,12 +226,9 @@ export class FolderService extends BaseService {
             const response = await this.makeCustomRequest<{
                 data: AngoraFolderResponse['data'][];
             }>(
-                `api/folders/${folderId}/path`,
+                `${ENDPOINTS.FOLDERS}/${folderId}/${ENDPOINTS.PATH}`,
                 {
-                    headers: {
-                        'x-portal': FolderService.SERVICE_HEADERS.PORTAL,
-                        'x-service-name': FolderService.SERVICE_HEADERS.SERVICE_NAME
-                    }
+                    serviceName: 'service-file'
                 }
             );
 
