@@ -188,4 +188,39 @@ export class MapperUtils {
 
         return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     }
+
+    /**
+ * Maps an array of Alfresco API entries to Document objects
+ * @param entries - Array of raw Alfresco node entries from the API response
+ * @returns Array of mapped Document objects with standardized properties
+ * @example
+ * const documents = MapperUtils.mapAlfrescoDocuments(response.list.entries);
+ * // Returns: Document[] with mapped properties from Alfresco format
+ */
+static mapAlfrescoDocuments(entries: any[]): Document[] {
+    return entries.map(entry => this.mapAlfrescoDocument(entry));
 }
+
+static mapAlfrescoSites(entries: any[]): Document[] {
+    return entries.map(entry => ({
+        id: entry.entry.id,
+        name: entry.entry.title,
+        description: entry.entry.description,
+        path: `/sites/${entry.entry.id}`,
+        mimeType: 'folder',
+        size: 0,
+        lastModified: entry.entry.modifiedAt || new Date().toISOString(),
+        createdAt: entry.entry.createdAt || new Date().toISOString(),
+        isFolder: true,
+        isDepartment: true,
+        createdBy: entry.entry.visibility,
+        modifiedBy: '', // Add missing property
+        isOfflineAvailable: false // Add missing property
+    }));
+}
+
+}
+
+
+
+

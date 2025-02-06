@@ -1,84 +1,185 @@
 // src/api/providers/alfresco/services/FolderService.ts
 
 import { BaseService } from './BaseService';
-import { Folder, FolderListResponse, FolderResponse } from '../../../types';
-import { MapperUtils } from '../utils/MapperUtils';
+import { Folder } from '../../../types';
+import { ApiUtils } from '../utils/ApiUtils';
 
 /**
- * Service class for handling all folder-related operations in Alfresco
- * Provides methods for retrieving, creating, updating, and deleting folders
+ * Constants for API endpoints
+ */
+const ENDPOINTS = {
+    NODES: 'api/-default-/public/alfresco/versions/1/nodes',
+    CHILDREN: 'children',
+} as const;
+
+/**
+ * Interface for Alfresco API pagination data
+ */
+interface AlfrescoPagination {
+    count: number;
+    hasMoreItems: boolean;
+    totalItems: number;
+    skipCount: number;
+    maxItems: number;
+}
+
+/**
+ * Interface for Alfresco API user data
+ */
+interface AlfrescoUser {
+    id: string;
+    displayName: string;
+}
+
+/**
+ * Interface for Alfresco API path element
+ */
+interface AlfrescoPathElement {
+    id: string;
+    name: string;
+}
+
+/**
+ * Interface for a single Alfresco node entry
+ */
+interface AlfrescoNode {
+    id: string;
+    name: string;
+    nodeType: string;
+    isFolder: boolean;
+    isFile: boolean;
+    modifiedAt?: string;
+    createdAt?: string;
+    createdByUser?: AlfrescoUser;
+    modifiedByUser?: AlfrescoUser;
+    parentId?: string;
+    path?: {
+        elements: AlfrescoPathElement[];
+    };
+    properties?: Record<string, unknown>;
+    allowableOperations?: string[];
+}
+
+/**
+ * Interface for Alfresco API node response
+ */
+interface AlfrescoNodeResponse {
+    entry: AlfrescoNode;
+}
+
+/**
+ * Interface for Alfresco API nodes list response
+ */
+interface AlfrescoNodesResponse {
+    list: {
+        entries: AlfrescoNodeResponse[];
+        pagination: AlfrescoPagination;
+    };
+}
+
+/**
+ * Interface for folder creation request payload
+ */
+interface CreateFolderPayload {
+    name: string;
+    nodeType: string;
+    properties?: {
+        'cm:title'?: string;
+        'cm:description'?: string;
+    };
+    relativePath?: string;
+}
+/**
+ * Service class for handling folder operations with Alfresco API
  */
 export class FolderService extends BaseService {
+    constructor(baseUrl: string, apiUtils: ApiUtils) {
+        super(baseUrl, apiUtils);
+    }
+
     /**
-     * Retrieves all folders within a specified parent folder
-     * @param parentFolderId - Node ID of the parent folder
-     * @param filters - Optional filters for the query
-     * @param filters.nodeType - Optional Alfresco node type to filter by (e.g., 'st:sites')
+     * Retrieves a list of folders from a specified parent folder
+     * @param parentFolderId - ID of the parent folder
+     * @param filters - Optional filters including nodeType
      * @returns Promise resolving to array of Folder objects
      */
-    async getFolders(parentFolderId: string, filters?: { nodeType?: string }): Promise<Folder[]> {
+    async getFolders(
+        parentFolderId: string,
+        filters?: { nodeType?: string }
+    ): Promise<Folder[]> {
         try {
             this.logOperation('getFolders', { parentFolderId, filters });
 
-            const params = new URLSearchParams({
-                include: ['path', 'properties', 'allowableOperations'].join(',')
+            const queryParams = new URLSearchParams({
+                include: 'path,properties,allowableOperations',
+                where: '(isFolder=true)'
             });
 
-            // If no specific nodeType is provided, default to isFolder=true
-            if (!filters?.nodeType) {
-                params.append('where', '(isFolder=true)');
-            } else {
-                params.append('where', `(nodeType='${filters.nodeType}')`);
+            // Apply nodeType filter if provided
+            if (filters?.nodeType) {
+                queryParams.set('where', `(nodeType='${filters.nodeType}')`);
             }
 
-            const data = await this.makeRequest<FolderListResponse>(
-                `/api/-default-/public/alfresco/versions/1/nodes/${parentFolderId}/children?${params}`
+            // Handle special case for root folder
+            const nodeId = parentFolderId === '-root-' ? '-root-' : parentFolderId;
+            const endpoint = parentFolderId ? 
+                `${ENDPOINTS.NODES}/${nodeId}/${ENDPOINTS.CHILDREN}` :
+                ENDPOINTS.NODES;
+
+            const response = await this.makeRequest<AlfrescoNodesResponse>(
+                `${endpoint}?${queryParams}`
             );
 
-            const folders = data.list.entries.map(entry => 
-                MapperUtils.mapAlfrescoFolder(entry.entry)
-            );
+            if (!response?.list?.entries) {
+                throw new Error('Invalid response format');
+            }
+
+            const folders = response.list.entries
+                .filter(entry => entry.entry.isFolder)
+                .map(entry => this.mapAlfrescoNodeToFolder(entry.entry));
 
             this.logOperation('getFolders successful', { count: folders.length });
             return folders;
+
         } catch (error) {
-            this.logError('getFolders', error);
+            this.logError('getFolders failed', error);
             throw this.createError('Failed to get folders', error);
         }
     }
 
     /**
-     * Retrieves a single folder by its ID
-     * @param folderId - Node ID of the folder
-     * @returns Promise resolving to Folder object
+     * Retrieves details of a specific folder
+     * @param folderId - ID of the folder to retrieve
+     * @returns Promise resolving to a Folder object
      */
     async getFolder(folderId: string): Promise<Folder> {
         try {
             this.logOperation('getFolder', { folderId });
 
-            const params = new URLSearchParams({
-                include: ['path', 'properties', 'allowableOperations'].join(',')
-            });
-
-            const data = await this.makeRequest<FolderResponse>(
-                `/api/-default-/public/alfresco/versions/1/nodes/${folderId}?${params}`
+            const response = await this.makeRequest<AlfrescoNodeResponse>(
+                `${ENDPOINTS.NODES}/${folderId}?include=path,properties,allowableOperations`
             );
 
-            const folder = MapperUtils.mapAlfrescoFolder(data.entry);
+            if (!response?.entry) {
+                throw new Error('Invalid response format');
+            }
+
+            const folder = this.mapAlfrescoNodeToFolder(response.entry);
             this.logOperation('getFolder successful', { id: folder.id });
             return folder;
+
         } catch (error) {
-            this.logError('getFolder', error);
+            this.logError('getFolder failed', error);
             throw this.createError('Failed to get folder', error);
         }
     }
 
     /**
      * Creates a new folder
-     * @param parentFolderId - Parent folder Node ID
-     * @param name - Name for the new folder
+     * @param parentFolderId - ID of the parent folder
+     * @param name - Name of the new folder
      * @param description - Optional description for the folder
-     * @returns Promise resolving to created Folder object
+     * @returns Promise resolving to the created Folder object
      */
     async createFolder(
         parentFolderId: string,
@@ -88,144 +189,132 @@ export class FolderService extends BaseService {
         try {
             this.logOperation('createFolder', { parentFolderId, name });
 
-            const body = {
+            const payload: CreateFolderPayload = {
                 name,
                 nodeType: 'cm:folder',
-                relativePath: '',
                 properties: description ? {
                     'cm:description': description
                 } : undefined
             };
 
-            const data = await this.makeRequest<FolderResponse>(
-                `/api/-default-/public/alfresco/versions/1/nodes/${parentFolderId}/children`,
+            const response = await this.makeRequest<AlfrescoNodeResponse>(
+                `${ENDPOINTS.NODES}/${parentFolderId}/children`,
                 {
                     method: 'POST',
-                    body: JSON.stringify(body)
+                    body: JSON.stringify(payload)
                 }
             );
 
-            const folder = MapperUtils.mapAlfrescoFolder(data.entry);
+            if (!response?.entry) {
+                throw new Error('Invalid response format');
+            }
+
+            const folder = this.mapAlfrescoNodeToFolder(response.entry);
             this.logOperation('createFolder successful', { id: folder.id });
             return folder;
+
         } catch (error) {
-            this.logError('createFolder', error);
+            this.logError('createFolder failed', error);
             throw this.createError('Failed to create folder', error);
         }
     }
-
     /**
-     * Updates a folder's metadata
-     * @param folderId - Node ID of the folder to update
-     * @param properties - Object containing properties to update
-     * @returns Promise resolving to updated Folder object
+     * Deletes one or more folders
+     * @param folderIds - Single folder ID or array of folder IDs to delete
+     * @returns Promise that resolves when deletion is complete
      */
-    async updateFolder(
-        folderId: string,
-        properties: { name?: string; description?: string }
-    ): Promise<Folder> {
+    async deleteFolder(folderIds: string | string[]): Promise<void> {
         try {
-            this.logOperation('updateFolder', { folderId, properties });
+            const ids = Array.isArray(folderIds) ? folderIds : [folderIds];
+            this.logOperation('deleteFolder', { ids });
 
-            const updateData: Record<string, any> = {
-                ...(properties.name && { name: properties.name }),
-                ...(properties.description !== undefined && {
-                    properties: {
-                        'cm:description': properties.description
-                    }
-                })
-            };
-
-            const data = await this.makeRequest<FolderResponse>(
-                `/api/-default-/public/alfresco/versions/1/nodes/${folderId}`,
-                {
-                    method: 'PUT',
-                    body: JSON.stringify(updateData)
-                }
+            await Promise.all(
+                ids.map(id => 
+                    this.makeRequest(`${ENDPOINTS.NODES}/${id}`, {
+                        method: 'DELETE'
+                    })
+                )
             );
 
-            const folder = MapperUtils.mapAlfrescoFolder(data.entry);
-            this.logOperation('updateFolder successful', { id: folder.id });
-            return folder;
+            this.logOperation('deleteFolder successful', { ids });
         } catch (error) {
-            this.logError('updateFolder', error);
-            throw this.createError('Failed to update folder', error);
+            this.logError('deleteFolder failed', error);
+            throw this.createError('Failed to delete folder(s)', error);
         }
     }
 
     /**
-     * Deletes a folder and its contents
-     * @param folderId - Node ID of the folder to delete
+     * Retrieves the complete path to a folder
+     * @param folderId - ID of the folder
+     * @returns Promise resolving to array of Folder objects representing the path
      */
-    async deleteFolder(folderId: string): Promise<void> {
+    async getFolderPath(folderId: string): Promise<Folder[]> {
         try {
-            this.logOperation('deleteFolder', { folderId });
+            this.logOperation('getFolderPath', { folderId });
 
-            await this.makeRequest(
-                `/api/-default-/public/alfresco/versions/1/nodes/${folderId}`,
-                {
-                    method: 'DELETE'
-                }
+            const response = await this.makeRequest<AlfrescoNodeResponse>(
+                `${ENDPOINTS.NODES}/${folderId}?include=path`
             );
 
-            this.logOperation('deleteFolder successful', { folderId });
+            if (!response?.entry?.path?.elements) {
+                throw new Error('Invalid response format');
+            }
+
+            const path = response.entry.path.elements.map(element => ({
+                id: element.id,
+                name: element.name,
+                parentId: null, // Path elements don't include parent info
+                createdAt: undefined,
+                createdBy: undefined,
+                modifiedAt: undefined,
+                modifiedBy: undefined
+            }));
+
+            this.logOperation('getFolderPath successful', {
+                folderId,
+                pathLength: path.length
+            });
+
+            return path;
         } catch (error) {
-            this.logError('deleteFolder', error);
-            throw this.createError('Failed to delete folder', error);
+            this.logError('getFolderPath failed', error);
+            throw this.createError('Failed to get folder path', error);
         }
     }
 
     /**
-     * Moves a folder to a new parent folder
-     * @param folderId - Node ID of the folder to move
-     * @param targetParentId - Node ID of the destination parent folder
-     * @returns Promise resolving to moved Folder object
+     * Checks if a folder exists
+     * @param folderId - ID of the folder to check
+     * @returns Promise resolving to boolean indicating existence
      */
-    async moveFolder(folderId: string, targetParentId: string): Promise<Folder> {
+    async folderExists(folderId: string): Promise<boolean> {
         try {
-            this.logOperation('moveFolder', { folderId, targetParentId });
-
-            const data = await this.makeRequest<FolderResponse>(
-                `/api/-default-/public/alfresco/versions/1/nodes/${folderId}`,
-                {
-                    method: 'PUT',
-                    body: JSON.stringify({ targetParentId })
-                }
-            );
-
-            const folder = MapperUtils.mapAlfrescoFolder(data.entry);
-            this.logOperation('moveFolder successful', { id: folder.id });
-            return folder;
+            await this.getFolder(folderId);
+            return true;
         } catch (error) {
-            this.logError('moveFolder', error);
-            throw this.createError('Failed to move folder', error);
+            if (error instanceof Error && 
+                error.message.includes('404')) {
+                return false;
+            }
+            throw error;
         }
     }
 
     /**
-     * Copies a folder to a new parent folder
-     * @param folderId - Node ID of the folder to copy
-     * @param targetParentId - Node ID of the destination parent folder
-     * @returns Promise resolving to copied Folder object
+     * Maps an Alfresco node to our internal Folder type
+     * @param node - Alfresco node data
+     * @returns Folder object
      */
-    async copyFolder(folderId: string, targetParentId: string): Promise<Folder> {
-        try {
-            this.logOperation('copyFolder', { folderId, targetParentId });
-
-            const data = await this.makeRequest<FolderResponse>(
-                `/api/-default-/public/alfresco/versions/1/nodes/${folderId}/copy`,
-                {
-                    method: 'POST',
-                    body: JSON.stringify({ targetParentId })
-                }
-            );
-
-            const folder = MapperUtils.mapAlfrescoFolder(data.entry);
-            this.logOperation('copyFolder successful', { id: folder.id });
-            return folder;
-        } catch (error) {
-            this.logError('copyFolder', error);
-            throw this.createError('Failed to copy folder', error);
-        }
+    private mapAlfrescoNodeToFolder(node: AlfrescoNode): Folder {
+        return {
+            id: node.id,
+            name: node.name,
+            path: node.path?.elements.map(e => e.name).join('/'),
+            parentId: node.parentId || null,
+            createdAt: node.createdAt,
+            createdBy: node.createdByUser?.displayName,
+            modifiedAt: node.modifiedAt,
+            modifiedBy: node.modifiedByUser?.displayName
+        };
     }
 }

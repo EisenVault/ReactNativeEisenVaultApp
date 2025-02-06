@@ -36,13 +36,12 @@ export class DMSFactory {
    */
   static createProvider(type: ProviderType, config: ApiConfig): DMSProvider {
     switch (type) {
-      case 'alfresco':
-        return new AlfrescoProvider(config);
       case 'angora':
         return new AngoraProvider(config);
+      case 'alfresco':
+        return new AlfrescoProvider(config);
       default:
-        // TypeScript should prevent this case, but we handle it anyway
-        throw new Error(`Unknown provider type: ${type}`);
+        throw new Error('Invalid provider type');
     }
   }
 }

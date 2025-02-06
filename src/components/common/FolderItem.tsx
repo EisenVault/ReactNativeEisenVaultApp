@@ -21,29 +21,28 @@ interface Styles {
 
 const FolderItem: React.FC<FolderItemProps> = ({ folder, onPress }) => {
   return (
-    <TouchableOpacity 
-      style={styles.container} 
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.iconContainer}>
-        <FolderIcon 
-          size={24} 
-          color={theme.colors.primary}
-        />
-      </View>
-      <View style={styles.content}>
-        <Text style={styles.name} numberOfLines={1}>
-          {folder.name}
-        </Text>
-        <Text style={styles.details}>
-          Created by {folder.createdBy}
-        </Text>
-      </View>
-    </TouchableOpacity>
+      <TouchableOpacity 
+          style={styles.container} 
+          onPress={onPress}
+          activeOpacity={0.7}
+      >
+          <View style={styles.iconContainer}>
+              <FolderIcon 
+                  size={24} 
+                  color={theme.colors.primary}
+              />
+          </View>
+          <View style={styles.content}>
+              <Text style={styles.name} numberOfLines={1}>
+                  {folder.name}
+              </Text>
+              <Text style={styles.details}>
+                  Created by {folder.createdBy}
+              </Text>
+          </View>
+      </TouchableOpacity>
   );
 };
-
 const styles = StyleSheet.create<Styles>({
   container: {
     flexDirection: 'row',

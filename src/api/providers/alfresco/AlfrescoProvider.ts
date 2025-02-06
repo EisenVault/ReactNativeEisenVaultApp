@@ -1,160 +1,111 @@
 // src/api/providers/alfresco/AlfrescoProvider.ts
 
-import {
-    UserProfile,
-    AuthResponse,
-    Document,
-    Folder,
-    SearchResult,
-    ApiConfig,
-    DMSProvider
-} from '../../types';
-
+import { DMSProvider, ApiConfig } from '../../types';
 import { ApiUtils } from './utils/ApiUtils';
-import { 
-    AuthService,
-    DocumentService,
-    FolderService,
-    SearchService 
-} from './services';
-
+import { AuthService } from './services/AuthService';
+import { DocumentService } from './services/DocumentService';
+import { DepartmentService } from './services/DepartmentService';
+import { AuthResponse, Department, Document, Folder, SearchResult } from '../../types';
 /**
  * AlfrescoProvider implements the DMSProvider interface for Alfresco Content Services.
  * Handles all DMS operations including authentication, document management,
  * folder operations, and search functionality.
  */
+
 export class AlfrescoProvider implements DMSProvider {
     private authService: AuthService;
     private documentService: DocumentService;
-    private folderService: FolderService;
-    private searchService: SearchService;
-    private apiUtils: ApiUtils;
+    private departmentService: DepartmentService;
 
-    /**
-     * Initializes a new instance of AlfrescoProvider
-     * @param config - API configuration including baseUrl and other settings
-     */
     constructor(config: ApiConfig) {
-        this.apiUtils = new ApiUtils(config);
-        this.authService = new AuthService(config.baseUrl, this.apiUtils);
-        this.documentService = new DocumentService(config.baseUrl, this.apiUtils);
-        this.folderService = new FolderService(config.baseUrl, this.apiUtils);
-        this.searchService = new SearchService(config.baseUrl, this.apiUtils);
+        const apiUtils = new ApiUtils(config);
+        this.authService = new AuthService(config.baseUrl, apiUtils);
+        this.documentService = new DocumentService(config.baseUrl, apiUtils);
+        this.departmentService = new DepartmentService(config.baseUrl, apiUtils);
     }
 
-    /**
-     * Sets the authentication token for API requests
-     * @param token - Authentication token or null to clear
-     */
-    setToken(token: string | null): void {
-        this.apiUtils.setToken(token);
+    setToken(token: string): void {
+        this.authService.setToken(token);
     }
 
-    /**
-     * Authenticates user with Alfresco
-     * @param username - User's username
-     * @param password - User's password
-     * @returns Promise resolving to AuthResponse containing token and user profile
-     */
     async login(username: string, password: string): Promise<AuthResponse> {
-        return await this.authService.login(username, password);
+        const authResponse = await this.authService.login(username, password);
+        return {
+            token: authResponse.token,
+            userProfile: authResponse.userProfile
+        };
     }
 
-    /**
-     * Logs out the current user
-     * @returns Promise that resolves when logout is complete
-     */
-    async logout(): Promise<void> {
-        return await this.authService.logout();
+    async getDepartments(): Promise<Department[]> {
+        return this.departmentService.getDepartments();
     }
 
-    /**
-     * Retrieves all documents in a specified folder
-     * @param folderId - ID of the folder to get documents from
-     * @returns Promise resolving to array of Document objects
-     */
+    async getDepartment(departmentId: string): Promise<Department> {
+        return this.departmentService.getDepartment(departmentId);
+    }
+
+    async getFolders(departmentId: string): Promise<Folder[]> {
+        const response = await this.documentService.getDocuments(departmentId);
+        return response
+            .filter(item => item.isFolder)
+            .map(item => ({
+                id: item.id,
+                name: item.name,
+                path: item.path,
+                parentId: departmentId,
+                createdAt: item.createdAt,
+                createdBy: item.createdBy,
+                modifiedAt: item.lastModified,
+                modifiedBy: item.modifiedBy,
+                isDepartment: false
+            }));
+    }
+    
     async getDocuments(folderId: string): Promise<Document[]> {
-        return await this.documentService.getDocuments(folderId);
+        const response = await this.documentService.getDocuments(folderId);
+        return response.filter(doc => !doc.isFolder).map(doc => ({
+            id: doc.id,
+            name: doc.name,
+            path: doc.path,
+            mimeType: doc.mimeType,
+            size: doc.size,
+            lastModified: doc.lastModified,
+            createdAt: doc.createdAt,
+            createdBy: doc.createdBy,
+            modifiedBy: doc.modifiedBy,
+            isFolder: false,
+            modifiedAt: doc.modifiedAt,
+            isOfflineAvailable: doc.isOfflineAvailable,
+            isDepartment: false
+        }));
     }
+    
 
-    /**
-     * Retrieves a specific document by ID
-     * @param documentId - ID of the document to retrieve
-     * @returns Promise resolving to Document object
-     */
     async getDocument(documentId: string): Promise<Document> {
         return await this.documentService.getDocument(documentId);
     }
 
-    /**
-     * Uploads a new document to a specified folder
-     * @param folderId - ID of the folder to upload to
-     * @param file - File object to upload
-     * @returns Promise resolving to the created Document
-     */
     async uploadDocument(folderId: string, file: File): Promise<Document> {
-        return await this.documentService.uploadDocument(folderId, file);
+        return this.documentService.uploadDocument(folderId, file);
     }
 
-    /**
-     * Deletes a document by ID
-     * @param documentId - ID of the document to delete
-     * @returns Promise that resolves when deletion is complete
-     */
-    async deleteDocument(documentId: string): Promise<void> {
-        return await this.documentService.deleteDocument(documentId);
-    }
-
-    /**
-     * Downloads a document by ID
-     * @param documentId - ID of the document to download
-     * @returns Promise resolving to Blob containing the document data
-     */
     async downloadDocument(documentId: string): Promise<Blob> {
-        return await this.documentService.downloadDocument(documentId);
+        return this.documentService.downloadDocument(documentId);
     }
 
-    /**
-     * Retrieves all folders within a parent folder
-     * @param parentFolderId - ID of the parent folder
-     * @param filters - Optional filters for the query
-     * @param filters.nodeType - Optional Alfresco node type to filter by (e.g., 'st:sites')
-     * @returns Promise resolving to array of Folder objects
-     */
-    async getFolders(
-        parentFolderId: string, 
-        filters?: { nodeType?: string }
-    ): Promise<Folder[]> {
-        return await this.folderService.getFolders(parentFolderId, filters);
+    async deleteDocument(documentId: string): Promise<void> {
+        await this.documentService.deleteDocument(documentId);
     }
 
-    /**
-     * Creates a new folder within a parent folder
-     * @param parentFolderId - ID of the parent folder
-     * @param name - Name for the new folder
-     * @returns Promise resolving to the created Folder
-     */
-    async createFolder(parentFolderId: string, name: string): Promise<Folder> {
-        return await this.folderService.createFolder(parentFolderId, name);
+    async updateDocument(documentId: string, properties: Partial<Document>): Promise<Document> {
+        return this.documentService.updateDocument(documentId, properties);
     }
 
-    /**
-     * Deletes a folder by ID
-     * @param folderId - ID of the folder to delete
-     * @returns Promise that resolves when deletion is complete
-     */
-    async deleteFolder(folderId: string): Promise<void> {
-        return await this.folderService.deleteFolder(folderId);
+    async searchDocuments(query: string): Promise<Document[]> {
+        return this.documentService.searchDocuments(query);
     }
 
-    /**
-     * Performs a search across the DMS
-     * @param query - Search query string
-     * @returns Promise resolving to SearchResult containing matched documents and folders
-     */
-    async search(query: string): Promise<SearchResult> {
-        return await this.searchService.search(query);
-    }
+
 
     /**
      * Helper method to check if a document exists
@@ -198,4 +149,48 @@ export class AlfrescoProvider implements DMSProvider {
         }
         // Add additional validation as needed (file size limits, allowed types, etc.)
     }
+
+    async logout(): Promise<void> {
+        await this.authService.logout();
+    }
+    async createFolder(parentId: string, name: string): Promise<Folder> {
+        const response = await this.documentService.createFolder(parentId, name);
+        return {
+            id: response.id,
+            name: response.name,
+            path: response.path,
+            parentId: parentId,
+            createdAt: response.createdAt,
+            createdBy: response.createdBy,
+            modifiedAt: response.lastModified,
+            modifiedBy: response.modifiedBy,
+            isDepartment: false
+        };
+    }
+    async deleteFolder(folderId: string): Promise<void> {
+        await this.documentService.deleteFolder(folderId);
+    }
+    async search(query: string): Promise<SearchResult> {
+        const results = await this.documentService.searchDocuments(query);
+        return {
+            documents: results.filter(item => !item.isFolder),
+            folders: results.filter(item => item.isFolder).map(this.mapToFolder),
+            totalItems: results.length
+        };
+    }
+    
+    private mapToFolder(doc: Document): Folder {
+        return {
+            id: doc.id,
+            name: doc.name,
+            path: doc.path,
+            parentId: doc.path.split('/').slice(-2, -1)[0],
+            createdAt: doc.createdAt,
+            createdBy: doc.createdBy,
+            modifiedAt: doc.lastModified,
+            modifiedBy: doc.modifiedBy,
+            isDepartment: false
+        };
+    }
+    
 }

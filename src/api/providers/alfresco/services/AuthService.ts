@@ -41,6 +41,11 @@ export class AuthService extends BaseService {
         super(baseUrl, apiUtils);
     }
 
+    setToken(token: string): void {
+        this.apiUtils.setToken(token);
+        this.logOperation('Token set successfully');
+    }
+
     /**
      * Creates a delay promise for the specified duration
      */
@@ -258,7 +263,7 @@ export class AuthService extends BaseService {
 
             return {
                 token: this.apiUtils.getToken()!,
-                user: userProfile
+                userProfile: userProfile
             };
 
         } catch (error) {

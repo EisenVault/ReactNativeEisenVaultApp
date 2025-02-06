@@ -27,7 +27,8 @@ import { useDispatch } from 'react-redux';
 import { 
     setUserProfile, 
     setServerUrl as setServerUrlAction, 
-    setAuthToken as setAuthTokenAction 
+    setAuthToken as setAuthTokenAction,
+    setProviderType 
 } from '../../store/slices/authSlice';
 import { DMSFactory, ApiConfig } from '../../api';
 import { ChevronRight, ChevronLeft, Server, Key } from 'lucide-react-native';
@@ -157,50 +158,108 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onLoginSuccess }) => {
     };
 
     /**
-     * Checks for existing setup and attempts auto-login
-     */
-    const checkExistingSetup = async (): Promise<void> => {
-        try {
-            const [storedToken, storedUrl, storedType] = await Promise.all([
-                AsyncStorage.getItem(StorageKeys.AUTH_TOKEN),
-                AsyncStorage.getItem(StorageKeys.SERVER_URL),
-                AsyncStorage.getItem(StorageKeys.INSTANCE_TYPE)
-            ]);
+ * Checks for existing setup and attempts auto-login
+ */
+const checkExistingSetup = async (): Promise<void> => {
+    try {
+        const [storedToken, storedUrl, storedType] = await Promise.all([
+            AsyncStorage.getItem(StorageKeys.AUTH_TOKEN),
+            AsyncStorage.getItem(StorageKeys.SERVER_URL),
+            AsyncStorage.getItem(StorageKeys.INSTANCE_TYPE)
+        ]);
+        
+        if (storedToken && storedUrl && storedType && 
+            (storedType === INSTANCE_TYPES.CLASSIC || storedType === INSTANCE_TYPES.ANGORA)) {
             
-            if (storedToken && storedUrl && storedType && 
-                (storedType === INSTANCE_TYPES.CLASSIC || storedType === INSTANCE_TYPES.ANGORA)) {
-                
-                const formattedUrl = formatAndValidateUrl(storedUrl, storedType);
-                if (!formattedUrl) {
-                    await AsyncStorage.multiRemove(Object.values(StorageKeys));
-                    return;
-                }
-
-                const config: ApiConfig = { 
-                    baseUrl: formattedUrl, 
-                    timeout: 30000 
-                };
-
-                const provider = DMSFactory.createProvider(
-                    storedType === INSTANCE_TYPES.CLASSIC ? 'alfresco' : 'angora',
-                    config
-                );
-                
-                provider.setToken(storedToken);
-                
-                try {
-                    await provider.getDocuments('root');
-                    dispatch(setAuthTokenAction(storedToken));
-                    dispatch(setServerUrlAction(formattedUrl));
-                    onLoginSuccess();
-                } catch {
-                    await AsyncStorage.multiRemove(Object.values(StorageKeys));
-                }
+            const formattedUrl = formatAndValidateUrl(storedUrl, storedType);
+            if (!formattedUrl) {
+                await AsyncStorage.multiRemove(Object.values(StorageKeys));
+                return;
             }
-        } catch (error) {
-            console.error('Setup check failed:', error);
+
+            const config: ApiConfig = { 
+                baseUrl: formattedUrl, 
+                timeout: 30000 
+            };
+
+            const providerTypeValue = storedType === INSTANCE_TYPES.CLASSIC ? 'alfresco' : 'angora';
+            const provider = DMSFactory.createProvider(providerTypeValue, config);
+            
+            provider.setToken(storedToken);
+            
+            try {
+                await provider.getDocuments('root');
+                dispatch(setAuthTokenAction(storedToken));
+                dispatch(setServerUrlAction(formattedUrl));
+                dispatch(setProviderType(providerTypeValue));
+                onLoginSuccess();
+            } catch {
+                await AsyncStorage.multiRemove(Object.values(StorageKeys));
+            }
         }
-    };
+    } catch (error) {
+        console.error('Setup check failed:', error);
+    }
+};
+
+/**
+ * Handles user login attempt
+ */
+const handleLogin = async (): Promise<void> => {
+    if (!username || !instanceUrl || !password || !instanceType) {
+        setError('Please enter all required fields');
+        return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+        const config: ApiConfig = {
+            baseUrl: instanceUrl,
+            timeout: 30000,
+        };
+
+        const providerTypeValue = instanceType === INSTANCE_TYPES.CLASSIC ? 'alfresco' : 'angora';
+        const provider = DMSFactory.createProvider(providerTypeValue, config);
+
+        const response = await provider.login(username, password);
+
+        // Store credentials
+        await Promise.all([
+            AsyncStorage.setItem(StorageKeys.INSTANCE_TYPE, instanceType),
+            AsyncStorage.setItem(StorageKeys.SERVER_URL, instanceUrl),
+            AsyncStorage.setItem(StorageKeys.USERNAME, username),
+            AsyncStorage.setItem(StorageKeys.AUTH_TOKEN, response.token)
+        ]);
+
+        // Update Redux state
+        dispatch(setAuthTokenAction(response.token));
+        dispatch(setServerUrlAction(instanceUrl));
+        dispatch(setUserProfile(response.user));
+        dispatch(setProviderType(providerTypeValue));
+
+        onLoginSuccess();
+    } catch (error) {
+        let errorMessage = 'Login failed. Please check your credentials.';
+        
+        if (error instanceof Error) {
+            if (error.message.includes('Network Error')) {
+                errorMessage = 'Unable to connect to server. Please check the URL and try again.';
+            } else if (error.message.includes('401')) {
+                errorMessage = 'Invalid username or password.';
+            } else if (error.message.includes('timeout')) {
+                errorMessage = 'Server is not responding. Please try again.';
+            } else {
+                errorMessage = error.message;
+            }
+        }
+        
+        setError(errorMessage);
+    } finally {
+        setLoading(false);
+    }
+};
 
     /**
      * Handles progression to next step or login
@@ -237,65 +296,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onLoginSuccess }) => {
                 break;
         }
     };
-    /**
-    * Handles user login attempt
-    */
-   const handleLogin = async (): Promise<void> => {
-       if (!username || !instanceUrl || !password || !instanceType) {
-           setError('Please enter all required fields');
-           return;
-       }
-
-       setLoading(true);
-       setError('');
-
-       try {
-           const config: ApiConfig = {
-               baseUrl: instanceUrl,
-               timeout: 30000,
-           };
-
-           const provider = DMSFactory.createProvider(
-               instanceType === INSTANCE_TYPES.CLASSIC ? 'alfresco' : 'angora',
-               config
-           );
-
-           const response = await provider.login(username, password);
-
-           // Store credentials
-           await Promise.all([
-               AsyncStorage.setItem(StorageKeys.INSTANCE_TYPE, instanceType),
-               AsyncStorage.setItem(StorageKeys.SERVER_URL, instanceUrl),
-               AsyncStorage.setItem(StorageKeys.USERNAME, username),
-               AsyncStorage.setItem(StorageKeys.AUTH_TOKEN, response.token)
-           ]);
-
-           // Update Redux state
-           dispatch(setAuthTokenAction(response.token));
-           dispatch(setServerUrlAction(instanceUrl));
-           dispatch(setUserProfile(response.user));
-
-           onLoginSuccess();
-       } catch (error) {
-           let errorMessage = 'Login failed. Please check your credentials.';
-           
-           if (error instanceof Error) {
-               if (error.message.includes('Network Error')) {
-                   errorMessage = 'Unable to connect to server. Please check the URL and try again.';
-               } else if (error.message.includes('401')) {
-                   errorMessage = 'Invalid username or password.';
-               } else if (error.message.includes('timeout')) {
-                   errorMessage = 'Server is not responding. Please try again.';
-               } else {
-                   errorMessage = error.message;
-               }
-           }
-           
-           setError(errorMessage);
-       } finally {
-           setLoading(false);
-       }
-   };
+   
 
    const renderStepContent = (currentStep: SetupStepType, props: StepContentProps) => {
        switch (currentStep) {

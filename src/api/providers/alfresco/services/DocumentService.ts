@@ -3,47 +3,44 @@
 import { BaseService } from './BaseService';
 import { Document } from '../../../types';
 import { MapperUtils } from '../utils/MapperUtils';
+import { ApiUtils } from '../utils/ApiUtils';
 
 /**
  * Handles all document-related operations with the Alfresco API
  * Includes uploading, downloading, and managing documents
  */
 export class DocumentService extends BaseService {
-    /**
-     * Retrieves all documents within a specified folder
-     * @param folderId - Node ID of the folder to list documents from
-     * @returns Promise resolving to array of Document objects
-     */
+    private static readonly SERVICE_HEADERS = {
+        PORTAL: 'web',
+        SERVICE_NAME: 'service-file'
+    } as const;
+
+    constructor(baseUrl: string, apiUtils: ApiUtils) {
+        super(baseUrl, apiUtils);
+    }
+
     async getDocuments(folderId: string): Promise<Document[]> {
         try {
-            this.logOperation('getDocuments', { folderId });
-
+            const nodeId = folderId === 'root' ? '-root-' : folderId;
             const queryParams = new URLSearchParams({
-                where: '(isFile=true)',
                 include: ['path', 'properties', 'allowableOperations'].join(',')
             });
 
-            const data = await this.makeRequest<{ list: { entries: Array<{ entry: any }> } }>(
-                `/api/-default-/public/alfresco/versions/1/nodes/${folderId}/children?${queryParams.toString()}`
+            const response = await this.makeRequest<{ list: { entries: any[] } }>(
+                `/api/-default-/public/alfresco/versions/1/nodes/${nodeId}/children?${queryParams}`
             );
 
-            const documents = data.list.entries.map(entry => 
-                MapperUtils.mapAlfrescoDocument(entry.entry)
-            );
+            if (!response?.list?.entries) {
+                throw new Error('Invalid response format');
+            }
 
-            this.logOperation('getDocuments successful', { count: documents.length });
-            return documents;
+            return MapperUtils.mapAlfrescoDocuments(response.list.entries);
         } catch (error) {
             this.logError('getDocuments', error);
             throw this.createError('Failed to get documents', error);
         }
     }
 
-    /**
-     * Gets a single document by its ID
-     * @param documentId - Node ID of the document
-     * @returns Promise resolving to Document object
-     */
     async getDocument(documentId: string): Promise<Document> {
         try {
             this.logOperation('getDocument', { documentId });
@@ -53,7 +50,7 @@ export class DocumentService extends BaseService {
             });
 
             const data = await this.makeRequest<{ entry: any }>(
-                `/api/-default-/public/alfresco/versions/1/nodes/${documentId}?${queryParams.toString()}`
+                `/api/-default-/public/alfresco/versions/1/nodes/${documentId}?${queryParams}`
             );
 
             const document = MapperUtils.mapAlfrescoDocument(data.entry);
@@ -65,16 +62,10 @@ export class DocumentService extends BaseService {
         }
     }
 
-    /**
-     * Uploads a new document to a specified folder
-     * @param folderId - Destination folder Node ID
-     * @param file - File object to upload
-     * @returns Promise resolving to uploaded Document object
-     */
     async uploadDocument(folderId: string, file: File): Promise<Document> {
         try {
-            this.logOperation('uploadDocument', { 
-                folderId, 
+            this.logOperation('uploadDocument', {
+                folderId,
                 fileName: file.name,
                 fileSize: file.size
             });
@@ -87,10 +78,7 @@ export class DocumentService extends BaseService {
                 `/api/-default-/public/alfresco/versions/1/nodes/${folderId}/children`,
                 {
                     method: 'POST',
-                    body: formData,
-                    headers: {
-                        // Let browser set the correct Content-Type for FormData
-                    }
+                    body: formData
                 }
             );
 
@@ -103,11 +91,6 @@ export class DocumentService extends BaseService {
         }
     }
 
-    /**
-     * Downloads a document's content
-     * @param documentId - Node ID of the document to download
-     * @returns Promise resolving to Blob containing the document data
-     */
     async downloadDocument(documentId: string): Promise<Blob> {
         try {
             this.logOperation('downloadDocument', { documentId });
@@ -126,9 +109,9 @@ export class DocumentService extends BaseService {
             }
 
             const blob = await response.blob();
-            this.logOperation('downloadDocument successful', { 
+            this.logOperation('downloadDocument successful', {
                 documentId,
-                size: blob.size 
+                size: blob.size
             });
             return blob;
         } catch (error) {
@@ -137,10 +120,6 @@ export class DocumentService extends BaseService {
         }
     }
 
-    /**
-     * Deletes a document
-     * @param documentId - Node ID of the document to delete
-     */
     async deleteDocument(documentId: string): Promise<void> {
         try {
             this.logOperation('deleteDocument', { documentId });
@@ -159,12 +138,6 @@ export class DocumentService extends BaseService {
         }
     }
 
-    /**
-     * Updates a document's metadata
-     * @param documentId - Node ID of the document to update
-     * @param properties - Object containing properties to update
-     * @returns Promise resolving to updated Document object
-     */
     async updateDocument(
         documentId: string,
         properties: Partial<Document>
@@ -188,4 +161,83 @@ export class DocumentService extends BaseService {
             throw this.createError('Update failed', error);
         }
     }
+
+    async getSites(): Promise<Document[]> {
+        try {
+            this.logOperation('getSites');
+            
+            const queryParams = new URLSearchParams({
+                skipCount: '0',
+                maxItems: '100',
+                fields: ['id', 'title', 'description', 'visibility'].join(',')
+            });
+    
+            const response = await this.makeRequest<{ list: { entries: any[] } }>(
+                `/api/-default-/public/alfresco/versions/1/sites?${queryParams}`
+            );
+    
+            if (!response?.list?.entries) {
+                throw new Error('Invalid sites response format');
+            }
+    
+            return MapperUtils.mapAlfrescoSites(response.list.entries);
+        } catch (error) {
+            this.logError('getSites', error);
+            throw this.createError('Failed to get sites', error);
+        }
+    }
+    
+    
+
+
+async searchDocuments(query: string): Promise<Document[]> {
+    try {
+        this.logOperation('searchDocuments', { query });
+        
+        const queryParams = new URLSearchParams({
+            term: query,
+            maxItems: '100',
+            nodeType: 'cm:content'
+        });
+
+        const response = await this.makeRequest<{ list: { entries: any[] } }>(
+            `/api/-default-/public/search/versions/1/search?${queryParams}`
+        );
+
+        if (!response?.list?.entries) {
+            throw new Error('Invalid search response format');
+        }
+
+        return MapperUtils.mapAlfrescoDocuments(response.list.entries);
+    } catch (error) {
+        this.logError('searchDocuments', error);
+        throw this.createError('Search failed', error);
+    }
+}
+
+
+async createFolder(parentId: string, name: string): Promise<Document> {
+    try {
+        const response = await this.makeRequest<{ entry: any }>(
+            `/api/-default-/public/alfresco/versions/1/nodes/${parentId}/children`,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    name,
+                    nodeType: 'cm:folder'
+                })
+            }
+        );
+        return MapperUtils.mapAlfrescoDocument(response.entry);
+    } catch (error) {
+        throw this.createError('Failed to create folder', error);
+    }
+}
+
+async deleteFolder(folderId: string): Promise<void> {
+    await this.makeRequest(
+        `/api/-default-/public/alfresco/versions/1/nodes/${folderId}`,
+        { method: 'DELETE' }
+    );
+}
 }

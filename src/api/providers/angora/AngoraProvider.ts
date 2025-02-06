@@ -7,7 +7,8 @@ import {
     Folder,
     SearchResult,
     ApiConfig,
-    DMSProvider
+    DMSProvider,
+    Department // Add this import
 } from '../../types';
 
 import { ApiUtils } from './utils/ApiUtils';
@@ -15,10 +16,10 @@ import {
     AuthService,
     DocumentService,
     FolderService,
-    SearchService 
+    SearchService,
+    DepartmentService // Ensure this matches the actual file name and path
 } from './services';
-
-/**
+ /**
  * Implementation of the DMSProvider interface for Angora DMS
  * Handles all operations including authentication, document/folder management,
  * and search functionality for the Angora backend
@@ -28,6 +29,7 @@ export class AngoraProvider implements DMSProvider {
     private documentService: DocumentService;
     private folderService: FolderService;
     private searchService: SearchService;
+    private departmentService: DepartmentService;
     private apiUtils: ApiUtils;
 
     constructor(config: ApiConfig) {
@@ -43,6 +45,7 @@ export class AngoraProvider implements DMSProvider {
         this.documentService = new DocumentService(config.baseUrl, this.apiUtils);
         this.folderService = new FolderService(config.baseUrl, this.apiUtils);
         this.searchService = new SearchService(config.baseUrl, this.apiUtils);
+        this.departmentService = new DepartmentService(config.baseUrl, this.apiUtils);
     }
 
     /**
@@ -165,6 +168,23 @@ export class AngoraProvider implements DMSProvider {
      */
     async search(query: string): Promise<SearchResult> {
         return await this.searchService.search(query);
+    }
+
+    /**
+     * Retrieves all departments
+     * @returns Promise resolving to array of Department objects
+     */
+    async getDepartments(): Promise<Department[]> {
+        return await this.departmentService.getDepartments();
+    }
+
+    /**
+     * Retrieves a specific department by ID
+     * @param departmentId - ID of the department to retrieve
+     * @returns Promise resolving to Department object
+     */
+    async getDepartment(departmentId: string): Promise<Department> {
+        return await this.departmentService.getDepartment(departmentId);
     }
 
     /**

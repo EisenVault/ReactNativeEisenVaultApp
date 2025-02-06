@@ -7,6 +7,7 @@ import { DocumentService } from './DocumentService';
 import { FolderService } from './FolderService';
 import { SearchService } from './SearchService';
 import { UserService } from './UserService';
+import { DepartmentService } from './DepartmentService'; // Ensure this import exists
 
 // Export all services for direct access when needed
 export * from './AuthService';
@@ -15,6 +16,7 @@ export * from './FolderService';
 export * from './SearchService';
 export * from './UserService';
 export * from './BaseService';
+export * from './DepartmentService';
 
 /**
  * Interface defining the shape of our service registry
