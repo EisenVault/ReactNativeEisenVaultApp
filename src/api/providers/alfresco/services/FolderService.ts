@@ -3,6 +3,7 @@
 import { BaseService } from './BaseService';
 import { Folder } from '../../../types';
 import { ApiUtils } from '../utils/ApiUtils';
+import { Logger } from '../../../../utils/Logger';
 
 /**
  * Constants for API endpoints
@@ -97,34 +98,38 @@ export class FolderService extends BaseService {
         super(baseUrl, apiUtils);
     }
 
-    /**
-     * Retrieves a list of folders from a specified parent folder
-     * @param parentFolderId - ID of the parent folder
-     * @param filters - Optional filters including nodeType
-     * @returns Promise resolving to array of Folder objects
-     */
     async getFolders(
         parentFolderId: string,
         filters?: { nodeType?: string }
     ): Promise<Folder[]> {
         try {
-            this.logOperation('getFolders', { parentFolderId, filters });
+            Logger.info('Fetching folders', {
+                dms: 'Alfresco',
+                service: 'FolderService',
+                method: 'getFolders',
+                data: { parentFolderId, filters }
+            });
 
             const queryParams = new URLSearchParams({
                 include: 'path,properties,allowableOperations',
                 where: '(isFolder=true)'
             });
 
-            // Apply nodeType filter if provided
             if (filters?.nodeType) {
                 queryParams.set('where', `(nodeType='${filters.nodeType}')`);
             }
 
-            // Handle special case for root folder
             const nodeId = parentFolderId === '-root-' ? '-root-' : parentFolderId;
             const endpoint = parentFolderId ? 
                 `${ENDPOINTS.NODES}/${nodeId}/${ENDPOINTS.CHILDREN}` :
                 ENDPOINTS.NODES;
+
+            Logger.debug('Making folder request', {
+                dms: 'Alfresco',
+                service: 'FolderService',
+                method: 'getFolders',
+                data: { endpoint, queryParams: queryParams.toString() }
+            });
 
             const response = await this.makeRequest<AlfrescoNodesResponse>(
                 `${endpoint}?${queryParams}`
@@ -138,11 +143,21 @@ export class FolderService extends BaseService {
                 .filter(entry => entry.entry.isFolder)
                 .map(entry => this.mapAlfrescoNodeToFolder(entry.entry));
 
-            this.logOperation('getFolders successful', { count: folders.length });
+            Logger.info('Folders fetched successfully', {
+                dms: 'Alfresco',
+                service: 'FolderService',
+                method: 'getFolders',
+                data: { count: folders.length }
+            });
+            
             return folders;
-
         } catch (error) {
-            this.logError('getFolders failed', error);
+            Logger.error('Failed to fetch folders', {
+                dms: 'Alfresco',
+                service: 'FolderService',
+                method: 'getFolders',
+                data: { parentFolderId }
+            }, error as Error);
             throw this.createError('Failed to get folders', error);
         }
     }

@@ -1,5 +1,6 @@
 // src/api/providers/angora/services/UserService.ts
 
+import { Logger } from '../../../../utils/Logger';
 import { BaseService } from './BaseService';
 import { UserProfile } from '../../../types';
 
@@ -84,7 +85,12 @@ export class UserService extends BaseService {
      */
     async fetchUserProfile(userId: string): Promise<UserProfile> {
         try {
-            this.logOperation('fetchUserProfile', { userId });
+            Logger.info('Fetching user profile', {
+                dms: 'Angora',
+                service: 'UserService',
+                method: 'fetchUserProfile',
+                data: { userId }
+            });
 
             const response = await this.makeCustomRequest<{ data: UserProfile }>(
                 `${this.API_ENDPOINTS.USERS}/${userId}`
@@ -92,7 +98,12 @@ export class UserService extends BaseService {
 
             return response.data;
         } catch (error) {
-            this.logError('fetchUserProfile', error);
+            Logger.error('Failed to fetch user profile', {
+                dms: 'Angora',
+                service: 'UserService',
+                method: 'fetchUserProfile',
+                data: { userId }
+            }, error instanceof Error ? error : undefined);
             throw this.createError('Failed to fetch user profile', error);
         }
     }
@@ -110,7 +121,12 @@ export class UserService extends BaseService {
         limit: number = 20
     ): Promise<{ users: UserProfile[]; total: number }> {
         try {
-            this.logOperation('listUsers', { filters, page, limit });
+            Logger.info('Listing users', {
+                dms: 'Angora',
+                service: 'UserService',
+                method: 'listUsers',
+                data: { filters, page, limit }
+            });
 
             const queryParams = new URLSearchParams({
                 page: page.toString(),
@@ -136,6 +152,7 @@ export class UserService extends BaseService {
             };
         } catch (error) {
             this.logError('listUsers', error);
+            
             throw this.createError('Failed to list users', error);
         }
     }

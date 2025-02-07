@@ -4,6 +4,7 @@ import { BaseService } from './BaseService';
 import { Folder } from '../../../types';
 import { ApiUtils } from '../utils/ApiUtils';
 import { MapperUtils } from '../utils/MapperUtils';
+import { Logger } from '../../../../utils/Logger';
 
 const ENDPOINTS = {
     DEPARTMENTS: 'departments',
@@ -53,7 +54,12 @@ export class FolderService extends BaseService {
         filters?: { nodeType?: string }
     ): Promise<Folder[]> {
         try {
-            this.logOperation('getFolders', { parentFolderId, filters });
+            Logger.info('Fetching folders', {
+                dms: 'Angora',
+                service: 'FolderService',
+                method: 'getFolders',
+                data: { parentFolderId, filters }
+            });
 
             const queryParams = new URLSearchParams({
                 only_folders: 'true'
@@ -79,11 +85,21 @@ export class FolderService extends BaseService {
             }
 
             const folders = MapperUtils.mapAngoraFolders(response.data);
-            this.logOperation('getFolders successful', { count: folders.length });
-            
+            Logger.info('Folders fetched successfully', {
+                dms: 'Angora',
+                service: 'FolderService',
+                method: 'getFolders',
+                data: { count: folders.length }
+            });
+
             return folders;
         } catch (error) {
-            this.logError('getFolders failed', error);
+            Logger.error('Failed to fetch folders', {
+                dms: 'Angora',
+                service: 'FolderService',
+                method: 'getFolders',
+                data: { parentFolderId }
+            }, error instanceof Error ? error : undefined);
             throw this.createError('Failed to get folders', error);
         }
     }

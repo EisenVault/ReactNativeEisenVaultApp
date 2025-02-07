@@ -24,7 +24,8 @@ import { ChevronLeft, Home } from 'lucide-react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import theme from '../../theme/theme';
 
-// Type definitions for items in the browser
+// BrowseItem represents any item that can be displayed in the browser
+// This unified type allows us to handle departments, folders and files in a single list
 interface BrowseItem {
     id: string;
     type: 'file' | 'folder' | 'department';
@@ -52,7 +53,14 @@ interface Styles {
 }
 
 const BrowseScreen: React.FC = () => {
-    // State management
+    // Core state management
+    // isLoading: Controls loading indicator visibility
+    // error: Stores any error messages
+    // items: Current list of items being displayed
+    // currentDepartmentId: Tracks the active department
+    // currentFolderId: Tracks the active folder
+    // breadcrumbs: Maintains navigation history
+    // provider: DMS provider instance for API operations
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [items, setItems] = useState<BrowseItem[]>([]);
@@ -61,16 +69,18 @@ const BrowseScreen: React.FC = () => {
     const [breadcrumbs, setBreadcrumbs] = useState<Array<Department | Folder>>([]);
     const [provider, setProvider] = useState<DMSProvider | null>(null);
 
-    // Get authentication state from Redux
+    // Get authentication data from Redux store
     const { userProfile, isAuthenticated, serverUrl, authToken, providerType } = useSelector(
         (state: RootState) => state.auth
     );
 
-    // Initialize provider when auth data is available
+    // Initialize DMS provider when authentication is confirmed
     useEffect(() => {
         let mounted = true;
         
         const initializeProvider = async (): Promise<void> => {
+            // Create and configure DMS provider based on auth data
+            // This enables API operations for the selected DMS type
             try {
                 if (!serverUrl || !authToken || !providerType) {
                     setError('Authentication data missing. Please log in again.');
@@ -107,8 +117,10 @@ const BrowseScreen: React.FC = () => {
         };
     }, [isAuthenticated, serverUrl, authToken, providerType]);
 
-    // Load departments
+    // Load departments (top-level containers)
     const loadDepartments = async (dmsProvider: DMSProvider): Promise<void> => {
+        // Fetch and display available departments
+        // These are the root level containers in the DMS
         try {
             setIsLoading(true);
             setError(null);
@@ -141,6 +153,8 @@ const BrowseScreen: React.FC = () => {
 
     // Load current content (folders/files within department or folder)
     const loadCurrentContent = async (): Promise<void> => {
+        // Fetch and display items within the selected container
+        // Handles both folders and files
         if (!provider) return;
 
         try {
@@ -177,6 +191,8 @@ const BrowseScreen: React.FC = () => {
 
     // Handle department selection
     const handleDepartmentPress = async (department: Department): Promise<void> => {
+        // Navigate into a department
+        // Updates breadcrumbs and loads department contents
         try {
             setCurrentDepartmentId(department.id);
             setCurrentFolderId('');
@@ -189,6 +205,8 @@ const BrowseScreen: React.FC = () => {
 
     // Handle folder selection
     const handleFolderPress = async (folder: Folder): Promise<void> => {
+        // Navigate into a folder
+        // Updates breadcrumbs and loads folder contents
         try {
             setCurrentFolderId(folder.id);
             
@@ -206,6 +224,8 @@ const BrowseScreen: React.FC = () => {
 
     // Handle file selection
     const handleFilePress = async (file: Document): Promise<void> => {
+        // Handle file selection
+        // Typically initiates file download or preview
       if (!provider) return;
 
       try {
@@ -218,185 +238,184 @@ const BrowseScreen: React.FC = () => {
       }
   };
 
-  // Navigation handlers
-  const handleBackPress = (): void => {
-      if (breadcrumbs.length > 0) {
-          const newBreadcrumbs = [...breadcrumbs];
-          newBreadcrumbs.pop();
-          setBreadcrumbs(newBreadcrumbs);
-          
-          if (newBreadcrumbs.length === 0) {
-              // Return to departments list
-              setCurrentDepartmentId('');
-              setCurrentFolderId('');
-              if (provider) {
-                  loadDepartments(provider);
-              }
-          } else {
-              const lastItem = newBreadcrumbs[newBreadcrumbs.length - 1];
-              if ('isDepartment' in lastItem && lastItem.isDepartment) {
-                  setCurrentDepartmentId(lastItem.id);
-                  setCurrentFolderId('');
-              } else {
-                  setCurrentFolderId(lastItem.id);
-              }
-          }
-      }
-  };
+    const handleBackPress = (): void => {
+        // Navigate to previous level
+        // Updates breadcrumbs and reloads appropriate content
+        if (breadcrumbs.length > 0) {
+            const newBreadcrumbs = [...breadcrumbs];
+            newBreadcrumbs.pop();
+            setBreadcrumbs(newBreadcrumbs);
+            
+            if (newBreadcrumbs.length === 0) {
+                // Return to departments list
+                setCurrentDepartmentId('');
+                setCurrentFolderId('');
+                if (provider) {
+                    loadDepartments(provider);
+                }
+            } else {
+                const lastItem = newBreadcrumbs[newBreadcrumbs.length - 1];
+                if ('isDepartment' in lastItem && lastItem.isDepartment) {
+                    setCurrentDepartmentId(lastItem.id);
+                    setCurrentFolderId('');
+                } else {
+                    setCurrentFolderId(lastItem.id);
+                }
+            }
+        }
+    };
 
-  const handleHomePress = async (): Promise<void> => {
-      setBreadcrumbs([]);
-      setCurrentDepartmentId('');
-      setCurrentFolderId('');
-      if (provider) {
-          await loadDepartments(provider);
-      }
-  };
+    const handleHomePress = async (): Promise<void> => {
+        // Return to root level (departments list)
+        // Resets navigation state
+        setBreadcrumbs([]);
+        setCurrentDepartmentId('');
+        setCurrentFolderId('');
+        if (provider) {
+            await loadDepartments(provider);
+        }
+    };
 
-  // Render individual list items
-  const renderItem = ({ item }: { item: BrowseItem }): React.ReactElement => {
-      switch (item.type) {
-          case 'department':
-              return (
-                  <DepartmentItem 
-                      department={item.data as Department} 
-                      onPress={() => handleDepartmentPress(item.data as Department)}
-                  />
-              );
-          case 'file':
-              return (
-                  <FileItem 
-                      file={item.data as Document} 
-                      onPress={() => handleFilePress(item.data as Document)}
-                  />
-              );
-          case 'folder':
-              return (
-                  <FolderItem 
-                      folder={item.data as Folder} 
-                      onPress={() => handleFolderPress(item.data as Folder)}
-                  />
-              );
-      }
-  };
+    // Render methods
+    const renderItem = ({ item }: { item: BrowseItem }): React.ReactElement => {
+        // Renders appropriate component based on item type
+        // Uses DepartmentItem, FileItem, or FolderItem
+        switch (item.type) {
+            case 'department':
+                return (
+                    <DepartmentItem 
+                        department={item.data as Department} 
+                        onPress={() => handleDepartmentPress(item.data as Department)}
+                    />
+                );
+            case 'file':
+                return (
+                    <FileItem 
+                        file={item.data as Document} 
+                        onPress={() => handleFilePress(item.data as Document)}
+                    />
+                );
+            case 'folder':
+                return (
+                    <FolderItem 
+                        folder={item.data as Folder} 
+                        onPress={() => handleFolderPress(item.data as Folder)}
+                    />
+                );
+        }
+    };
 
-  // Render breadcrumb navigation
-  const renderBreadcrumbs = (): React.ReactElement => (
-      <View style={styles.breadcrumbs}>
-          <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.breadcrumbsContent}
-              contentContainerStyle={styles.breadcrumbsContainer}
-          >
-              <View style={styles.breadcrumbRow}>
-                  <Button 
-                      key="home-button"
-                      mode="text"
-                      onPress={handleHomePress}
-                      icon={() => Platform.select({
-                          ios: <MaterialIcons name="home" size={20} color={theme.colors.primary} />,
-                          default: <Home size={20} color={theme.colors.primary} />
-                      })}
-                  >
-                      Departments
-                  </Button>
-                  {breadcrumbs.map((item, index) => (
-                      <View key={`${item.id}-${index}`} style={styles.breadcrumbItem}>
-                          <Text style={styles.breadcrumbSeparator}>/</Text>
-                          <Button 
-                              mode="text"
-                              onPress={() => {
-                                  const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
-                                  setBreadcrumbs(newBreadcrumbs);
-                                  if ('isDepartment' in item && item.isDepartment) {
-                                      setCurrentDepartmentId(item.id);
-                                      setCurrentFolderId('');
-                                  } else {
-                                      setCurrentFolderId(item.id);
-                                  }
-                              }}
-                              style={styles.breadcrumbButton}
-                              labelStyle={styles.breadcrumbLabel}
-                          >
-                              {item.name}
-                          </Button>
-                      </View>
-                  ))}
-              </View>
-          </ScrollView>
-      </View>
-  );
+    const renderBreadcrumbs = (): React.ReactElement => {
+        // Displays navigation hierarchy
+        // Enables direct navigation to previous levels
+        return (
+            <View style={styles.breadcrumbs}>
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.breadcrumbsContent}
+                    contentContainerStyle={styles.breadcrumbsContainer}
+                >
+                    <View style={styles.breadcrumbRow}>
+                        <Button 
+                            key="home-button"
+                            mode="text"
+                            onPress={handleHomePress}
+                            icon={() => Platform.select({
+                                ios: <MaterialIcons name="home" size={20} color={theme.colors.primary} />,
+                                default: <Home size={20} color={theme.colors.primary} />
+                            })}
+                        >
+                            Departments
+                        </Button>
+                        {breadcrumbs.map((item, index) => (
+                            <View key={`${item.id}-${index}`} style={styles.breadcrumbItem}>
+                                <Text style={styles.breadcrumbSeparator}>/</Text>
+                                <Button 
+                                    mode="text"
+                                    onPress={() => {
+                                        const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
+                                        setBreadcrumbs(newBreadcrumbs);
+                                        if ('isDepartment' in item && item.isDepartment) {
+                                            setCurrentDepartmentId(item.id);
+                                            setCurrentFolderId('');
+                                        } else {
+                                            setCurrentFolderId(item.id);
+                                        }
+                                    }}
+                                    style={styles.breadcrumbButton}
+                                    labelStyle={styles.breadcrumbLabel}
+                                >
+                                    {item.name}
+                                </Button>
+                            </View>
+                        ))}
+                    </View>
+                </ScrollView>
+            </View>
+        );
+    };
 
-  // Main render method
-  if (isLoading) {
-      return (
-          <SafeAreaView style={styles.container}>
-              <View style={styles.centerContainer}>
-                  <ActivityIndicator size="large" color={theme.colors.primary} />
-              </View>
-          </SafeAreaView>
-      );
-  }
-
-  if (error) {
-      return (
-          <SafeAreaView style={styles.container}>
-              <View style={styles.centerContainer}>
-                  <Text style={styles.errorText}>{error}</Text>
-                  <Button 
-                      mode="contained" 
-                      onPress={() => {
-                          if (currentDepartmentId || currentFolderId) {
-                              loadCurrentContent();
-                          } else if (provider) {
-                              loadDepartments(provider);
-                          }
-                      }}
-                      style={{ marginTop: theme.spacing.base }}
-                  >
-                      Retry
-                  </Button>
-              </View>
-          </SafeAreaView>
-      );
-  }
-
-  return (
-      <SafeAreaView style={styles.container}>
-          <View style={styles.contentContainer}>
-              {renderBreadcrumbs()}
-              {(currentDepartmentId || currentFolderId) && (
-                  <Button 
-                      mode="text"
-                      onPress={handleBackPress}
-                      icon={() => Platform.select({
-                          ios: <MaterialIcons name="chevron-left" size={20} color={theme.colors.primary} />,
-                          default: <ChevronLeft size={20} color={theme.colors.primary} />
-                      })}
-                      style={styles.backButton}
-                  >
-                      Back
-                  </Button>
-              )}
-              <FlatList
-                  data={items}
-                  renderItem={renderItem}
-                  keyExtractor={(item) => item.id}
-                  contentContainerStyle={styles.listContent}
-                  ListEmptyComponent={() => (
-                      <View style={styles.emptyContainer}>
-                          <Text style={styles.emptyText}>
-                              {currentDepartmentId || currentFolderId 
-                                  ? 'This folder is empty'
-                                  : 'No departments available'}
-                          </Text>
-                      </View>
-                  )}
-              />
-          </View>
-      </SafeAreaView>
-  );
+    // Main render logic with conditional states
+    // Handles loading, error, and content display states
+    return (
+        <SafeAreaView style={styles.container}>
+            {isLoading ? (
+                <View style={styles.centerContainer}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                </View>
+            ) : error ? (
+                <View style={styles.centerContainer}>
+                    <Text style={styles.errorText}>{error}</Text>
+                    <Button 
+                        mode="contained" 
+                        onPress={() => {
+                            if (currentDepartmentId || currentFolderId) {
+                                loadCurrentContent();
+                            } else if (provider) {
+                                loadDepartments(provider);
+                            }
+                        }}
+                        style={{ marginTop: theme.spacing.base }}
+                    >
+                        Retry
+                    </Button>
+                </View>
+            ) : (
+                <View style={styles.contentContainer}>
+                    {renderBreadcrumbs()}
+                    {(currentDepartmentId || currentFolderId) && (
+                        <Button 
+                            mode="text"
+                            onPress={handleBackPress}
+                            icon={() => Platform.select({
+                                ios: <MaterialIcons name="chevron-left" size={20} color={theme.colors.primary} />,
+                                default: <ChevronLeft size={20} color={theme.colors.primary} />
+                            })}
+                            style={styles.backButton}
+                        >
+                            Back
+                        </Button>
+                    )}
+                    <FlatList
+                        data={items}
+                        renderItem={renderItem}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={styles.listContent}
+                        ListEmptyComponent={() => (
+                            <View style={styles.emptyContainer}>
+                                <Text style={styles.emptyText}>
+                                    {currentDepartmentId || currentFolderId 
+                                        ? 'This folder is empty'
+                                        : 'No departments available'}
+                                </Text>
+                            </View>
+                        )}
+                    />
+                </View>
+            )}
+        </SafeAreaView>
+    );
 };
 
 const styles = StyleSheet.create<Styles>({

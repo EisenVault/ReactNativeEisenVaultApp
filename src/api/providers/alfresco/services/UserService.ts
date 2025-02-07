@@ -1,12 +1,10 @@
 // src/api/providers/alfresco/services/UserService.ts
 
+import { Logger } from '../../../../utils/Logger';
 import { BaseService } from './BaseService';
-import { UserProfile } from '../../../types';
 import { MapperUtils } from '../utils/MapperUtils';
+import { UserProfile } from '../../../types';
 
-/**
- * Handles all user-related operations with the Alfresco API
- */
 export class UserService extends BaseService {
     /**
      * Fetches user profile information
@@ -15,7 +13,12 @@ export class UserService extends BaseService {
      */
     async fetchUserProfile(userId: string): Promise<UserProfile> {
         try {
-            this.logOperation('fetchUserProfile', { userId });
+            Logger.info('Fetching user profile', {
+                dms: 'Alfresco',
+                service: 'UserService',
+                method: 'fetchUserProfile',
+                data: { userId }
+            });
 
             const params = new URLSearchParams({
                 include: ['properties', 'capabilities'].join(',')
@@ -26,11 +29,21 @@ export class UserService extends BaseService {
             );
 
             const profile = MapperUtils.mapAlfrescoUser(data.entry);
-            this.logOperation('fetchUserProfile successful', { userId: profile.id });
+            Logger.info('User profile fetched successfully', {
+                dms: 'Alfresco',
+                service: 'UserService',
+                method: 'fetchUserProfile',
+                data: { userId: profile.id }
+            });
             return profile;
 
         } catch (error) {
-            this.logError('fetchUserProfile', error);
+            Logger.error('Failed to fetch user profile', {
+                dms: 'Alfresco',
+                service: 'UserService',
+                method: 'fetchUserProfile',
+                data: { userId }
+            }, error instanceof Error ? error : undefined);
 
             // For 404 errors, return a basic profile
             if (this.isNotFoundError(error)) {
@@ -53,7 +66,12 @@ export class UserService extends BaseService {
     ): Promise<UserProfile> {
         try {
             // Using logOperation which internally uses BaseService's sanitizeLogData
-            this.logOperation('updateUserProfile', { userId, updates });
+            Logger.info('Updating user profile', {
+                dms: 'Alfresco',
+                service: 'UserService',
+                method: 'updateUserProfile',
+                data: { userId, updates: Logger.sanitizeData(updates) }
+            });
 
             const data = await this.makeRequest<{ entry: any }>(
                 `/api/-default-/public/alfresco/versions/1/people/${userId}`,
@@ -64,14 +82,25 @@ export class UserService extends BaseService {
             );
 
             const profile = MapperUtils.mapAlfrescoUser(data.entry);
-            this.logOperation('updateUserProfile successful', { userId: profile.id });
+            Logger.info('User profile updated successfully', {
+                dms: 'Alfresco',
+                service: 'UserService',
+                method: 'updateUserProfile',
+                data: { userId: profile.id }
+            });
             return profile;
 
         } catch (error) {
-            this.logError('updateUserProfile', error);
+            Logger.error('Failed to update user profile', {
+                dms: 'Alfresco',
+                service: 'UserService',
+                method: 'updateUserProfile',
+                data: { userId }
+            }, error instanceof Error ? error : undefined);
             throw this.createError('Failed to update user profile', error);
         }
     }
+
 
     /**
      * Gets the current user's profile information

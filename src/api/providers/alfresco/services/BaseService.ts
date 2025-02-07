@@ -1,6 +1,7 @@
 // src/api/providers/alfresco/services/BaseService.ts
 
 import { ApiUtils } from '../utils/ApiUtils';
+import { Logger } from '../../../../utils/Logger';
 
 /**
  * Base class for all Alfresco service implementations.
@@ -97,16 +98,12 @@ export abstract class BaseService {
      * @param details - Optional details to log
      */
     protected logOperation(operation: string, details?: any): void {
-        const timestamp = new Date().toISOString();
-        const serviceName = this.constructor.name;
-
-        if (details) {
-            console.log(`[${timestamp}] [${serviceName}] ${operation}:`, 
-                this.sanitizeLogData(details)
-            );
-        } else {
-            console.log(`[${timestamp}] [${serviceName}] ${operation}`);
-        }
+        Logger.info(operation, {
+            dms: 'Alfresco',
+            service: this.constructor.name, // Dynamically get the service name
+            method: operation, // Use the operation name as the method
+            data: details ? Logger.sanitizeData(details) : undefined
+        });
     }
 
     /**
@@ -116,18 +113,16 @@ export abstract class BaseService {
      * @param context - Optional additional context
      */
     protected logError(operation: string, error: unknown, context?: any): void {
-        const timestamp = new Date().toISOString();
-        const serviceName = this.constructor.name;
-
-        console.error(`[${timestamp}] [${serviceName}] Error in ${operation}:`, error);
-
-        if (error instanceof Error) {
-            console.error('Stack trace:', error.stack);
-        }
-
-        if (context) {
-            console.error('Additional context:', this.sanitizeLogData(context));
-        }
+        Logger.error(
+            `Error in ${operation}`,
+            {
+                dms: 'Alfresco',
+                service: this.constructor.name,
+                method: operation,
+                data: context ? Logger.sanitizeData(context) : undefined
+            },
+            error instanceof Error ? error : undefined // Pass the error object for stack trace
+        );
     }
 
     /**

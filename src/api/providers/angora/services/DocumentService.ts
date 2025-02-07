@@ -4,6 +4,8 @@ import { BaseService } from './BaseService';
 import { Document } from '../../../types';
 import { ApiUtils } from '../utils/ApiUtils';
 import { MapperUtils } from '../utils/MapperUtils';
+import { Logger } from '../../../../utils/Logger';
+
 
 /**
  * Interface for Angora API document response
@@ -74,7 +76,12 @@ export class DocumentService extends BaseService {
      */
     async getDocuments(folderId: string): Promise<Document[]> {
         try {
-            this.logOperation('getDocuments', { folderId });
+            Logger.info('Fetching documents', {
+                dms: 'Angora',
+                service: 'DocumentService',
+                method: 'getDocuments',
+                data: { folderId }
+            });
 
             const params = new URLSearchParams({
                 action: 'default'
@@ -95,11 +102,21 @@ export class DocumentService extends BaseService {
             }
 
             const documents = MapperUtils.mapAngoraDocuments(response.data);
-            this.logOperation('getDocuments successful', { count: documents.length });
-            
+            Logger.info('Documents fetched successfully', {
+                dms: 'Angora',
+                service: 'DocumentService',
+                method: 'getDocuments',
+                data: { count: documents.length }
+            });
+
             return documents;
         } catch (error) {
-            this.logError('getDocuments failed', error);
+            Logger.error('Failed to fetch documents', {
+                dms: 'Angora',
+                service: 'DocumentService',
+                method: 'getDocuments',
+                data: { folderId }
+            }, error instanceof Error ? error : undefined);
             throw this.createError('Failed to get documents', error);
         }
     }
@@ -111,7 +128,12 @@ export class DocumentService extends BaseService {
      */
     async getDocument(documentId: string): Promise<Document> {
         try {
-            this.logOperation('getDocument', { documentId });
+            Logger.info('Fetching document', {
+                dms: 'Angora',
+                service: 'DocumentService',
+                method: 'getDocument',
+                data: { documentId }
+            });
 
             const response = await this.makeCustomRequest<AngoraDocumentResponse>(
                 `api/nodes/${documentId}`,
@@ -128,11 +150,21 @@ export class DocumentService extends BaseService {
             }
 
             const document = MapperUtils.mapAngoraDocument(response.data);
-            this.logOperation('getDocument successful', { id: document.id });
+            Logger.info('Document fetched successfully', {
+                dms: 'Angora',
+                service: 'DocumentService',
+                method: 'getDocument',
+                data: { id: document.id }
+            });
             
             return document;
         } catch (error) {
-            this.logError('getDocument failed', error);
+            Logger.error('Failed to fetch document', {
+                dms: 'Angora',
+                service: 'DocumentService',
+                method: 'getDocument',
+                data: { documentId }
+            }, error instanceof Error ? error : undefined);
             throw this.createError('Failed to get document', error);
         }
     }

@@ -1,9 +1,10 @@
 // src/api/providers/alfresco/services/DocumentService.ts
 
 import { BaseService } from './BaseService';
-import { Document } from '../../../types';
+import { Document, Department } from '../../../types';
 import { MapperUtils } from '../utils/MapperUtils';
 import { ApiUtils } from '../utils/ApiUtils';
+import { Logger } from '../../../../utils/Logger';
 
 /**
  * Handles all document-related operations with the Alfresco API
@@ -21,9 +22,21 @@ export class DocumentService extends BaseService {
 
     async getDocuments(folderId: string): Promise<Document[]> {
         try {
-            console.log('DocumentService: Starting document fetch for folder:', folderId);
+            Logger.info('Starting document fetch', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'getDocuments',
+                data: { folderId }
+            });
+
             const nodeId = folderId === 'root' ? '-root-' : folderId;
-            console.log('DocumentService: Using nodeId:', nodeId);
+            Logger.debug('Using nodeId for fetch', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'getDocuments',
+                data: { nodeId }
+            });
+
             const queryParams = new URLSearchParams({
                 include: ['path', 'properties', 'allowableOperations'].join(',')
             });
@@ -36,16 +49,33 @@ export class DocumentService extends BaseService {
                 throw new Error('Invalid response format');
             }
 
-            return response.list.entries.map(entry => MapperUtils.mapAlfrescoDocument(entry));
+            const documents = response.list.entries.map(entry => MapperUtils.mapAlfrescoDocument(entry));
+            Logger.info('Documents fetched successfully', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'getDocuments',
+                data: { count: documents.length }
+            });
+
+            return documents;
         } catch (error) {
-            this.logError('getDocuments', error);
+            Logger.error('Failed to fetch documents', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'getDocuments',
+                data: { folderId }
+            }, error as Error);
             throw this.createError('Failed to get documents', error);
         }
     }
-
     async getDocument(documentId: string): Promise<Document> {
         try {
-            this.logOperation('getDocument', { documentId });
+            Logger.info('Fetching single document', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'getDocument',
+                data: { documentId }
+            });
 
             const queryParams = new URLSearchParams({
                 include: ['path', 'properties', 'allowableOperations'].join(',')
@@ -56,20 +86,35 @@ export class DocumentService extends BaseService {
             );
 
             const document = MapperUtils.mapAlfrescoDocument(data.entry);
-            this.logOperation('getDocument successful', { id: document.id });
+            Logger.info('Document fetched successfully', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'getDocument',
+                data: { id: document.id }
+            });
             return document;
         } catch (error) {
-            this.logError('getDocument', error);
+            Logger.error('Failed to fetch document', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'getDocument',
+                data: { documentId }
+            }, error as Error);
             throw this.createError('Failed to get document', error);
         }
     }
 
     async uploadDocument(folderId: string, file: File): Promise<Document> {
         try {
-            this.logOperation('uploadDocument', {
-                folderId,
-                fileName: file.name,
-                fileSize: file.size
+            Logger.info('Starting document upload', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'uploadDocument',
+                data: {
+                    folderId,
+                    fileName: file.name,
+                    fileSize: file.size
+                }
             });
 
             const formData = new FormData();
@@ -85,17 +130,32 @@ export class DocumentService extends BaseService {
             );
 
             const document = MapperUtils.mapAlfrescoDocument(data.entry);
-            this.logOperation('uploadDocument successful', { id: document.id });
+            Logger.info('Document uploaded successfully', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'uploadDocument',
+                data: { id: document.id }
+            });
             return document;
         } catch (error) {
-            this.logError('uploadDocument', error);
+            Logger.error('Upload failed', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'uploadDocument',
+                data: { folderId, fileName: file.name }
+            }, error as Error);
             throw this.createError('Upload failed', error);
         }
     }
 
     async downloadDocument(documentId: string): Promise<Blob> {
         try {
-            this.logOperation('downloadDocument', { documentId });
+            Logger.info('Starting document download', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'downloadDocument',
+                data: { documentId }
+            });
 
             const response = await this.apiUtils.fetch(
                 this.buildUrl(`/api/-default-/public/alfresco/versions/1/nodes/${documentId}/content`),
@@ -111,20 +171,32 @@ export class DocumentService extends BaseService {
             }
 
             const blob = await response.blob();
-            this.logOperation('downloadDocument successful', {
-                documentId,
-                size: blob.size
+            Logger.info('Document downloaded successfully', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'downloadDocument',
+                data: { documentId, size: blob.size }
             });
             return blob;
         } catch (error) {
-            this.logError('downloadDocument', error);
+            Logger.error('Download failed', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'downloadDocument',
+                data: { documentId }
+            }, error as Error);
             throw this.createError('Download failed', error);
         }
     }
 
     async deleteDocument(documentId: string): Promise<void> {
         try {
-            this.logOperation('deleteDocument', { documentId });
+            Logger.info('Deleting document', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'deleteDocument',
+                data: { documentId }
+            });
 
             await this.makeRequest(
                 `/api/-default-/public/alfresco/versions/1/nodes/${documentId}`,
@@ -133,19 +205,31 @@ export class DocumentService extends BaseService {
                 }
             );
 
-            this.logOperation('deleteDocument successful', { documentId });
+            Logger.info('Document deleted successfully', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'deleteDocument',
+                data: { documentId }
+            });
         } catch (error) {
-            this.logError('deleteDocument', error);
+            Logger.error('Delete failed', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'deleteDocument',
+                data: { documentId }
+            }, error as Error);
             throw this.createError('Delete failed', error);
         }
     }
 
-    async updateDocument(
-        documentId: string,
-        properties: Partial<Document>
-    ): Promise<Document> {
+    async updateDocument(documentId: string, properties: Partial<Document>): Promise<Document> {
         try {
-            this.logOperation('updateDocument', { documentId, properties });
+            Logger.info('Updating document', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'updateDocument',
+                data: { documentId, properties }
+            });
 
             const data = await this.makeRequest<{ entry: any }>(
                 `/api/-default-/public/alfresco/versions/1/nodes/${documentId}`,
@@ -156,15 +240,24 @@ export class DocumentService extends BaseService {
             );
 
             const document = MapperUtils.mapAlfrescoDocument(data.entry);
-            this.logOperation('updateDocument successful', { id: document.id });
+            Logger.info('Document updated successfully', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'updateDocument',
+                data: { id: document.id }
+            });
             return document;
         } catch (error) {
-            this.logError('updateDocument', error);
+            Logger.error('Update failed', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'updateDocument',
+                data: { documentId }
+            }, error as Error);
             throw this.createError('Update failed', error);
         }
     }
-
-    async getSites(): Promise<Document[]> {
+    async getSites(): Promise<Department[]> {
         try {
             this.logOperation('getSites');
             
@@ -182,7 +275,7 @@ export class DocumentService extends BaseService {
                 throw new Error('Invalid sites response format');
             }
     
-            return MapperUtils.mapAlfrescoSites(response.list.entries);
+            return MapperUtils.mapDepartments(response.list.entries);
         } catch (error) {
             this.logError('getSites', error);
             throw this.createError('Failed to get sites', error);
@@ -193,53 +286,114 @@ export class DocumentService extends BaseService {
 
 
 async searchDocuments(query: string): Promise<Document[]> {
-    try {
-        this.logOperation('searchDocuments', { query });
-        
-        const queryParams = new URLSearchParams({
-            term: query,
-            maxItems: '100',
-            nodeType: 'cm:content'
-        });
+        try {
+            Logger.info('Starting document search', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'searchDocuments',
+                data: { query }
+            });
+            
+            const queryParams = new URLSearchParams({
+                term: query,
+                maxItems: '100',
+                nodeType: 'cm:content'
+            });
 
-        const response = await this.makeRequest<{ list: { entries: any[] } }>(
-            `/api/-default-/public/search/versions/1/search?${queryParams}`
-        );
+            const response = await this.makeRequest<{ list: { entries: any[] } }>(
+                `/api/-default-/public/search/versions/1/search?${queryParams}`
+            );
 
-        if (!response?.list?.entries) {
-            throw new Error('Invalid search response format');
-        }
-
-        return MapperUtils.mapAlfrescoDocuments(response.list.entries);
-    } catch (error) {
-        this.logError('searchDocuments', error);
-        throw this.createError('Search failed', error);
-    }
-}
-
-
-async createFolder(parentId: string, name: string): Promise<Document> {
-    try {
-        const response = await this.makeRequest<{ entry: any }>(
-            `/api/-default-/public/alfresco/versions/1/nodes/${parentId}/children`,
-            {
-                method: 'POST',
-                body: JSON.stringify({
-                    name,
-                    nodeType: 'cm:folder'
-                })
+            if (!response?.list?.entries) {
+                throw new Error('Invalid search response format');
             }
-        );
-        return MapperUtils.mapAlfrescoDocument(response.entry);
-    } catch (error) {
-        throw this.createError('Failed to create folder', error);
-    }
-}
 
-async deleteFolder(folderId: string): Promise<void> {
-    await this.makeRequest(
-        `/api/-default-/public/alfresco/versions/1/nodes/${folderId}`,
-        { method: 'DELETE' }
-    );
-}
-}
+            const results = MapperUtils.mapAlfrescoDocuments(response.list.entries);
+            Logger.info('Search completed successfully', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'searchDocuments',
+                data: { resultsCount: results.length }
+            });
+
+            return results;
+        } catch (error) {
+            Logger.error('Search failed', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'searchDocuments',
+                data: { query }
+            }, error as Error);
+            throw this.createError('Search failed', error);
+        }
+    }
+
+    async createFolder(parentId: string, name: string): Promise<Document> {
+        try {
+            Logger.info('Creating new folder', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'createFolder',
+                data: { parentId, name }
+            });
+
+            const response = await this.makeRequest<{ entry: any }>(
+                `/api/-default-/public/alfresco/versions/1/nodes/${parentId}/children`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name,
+                        nodeType: 'cm:folder'
+                    })
+                }
+            );
+
+            const folder = MapperUtils.mapAlfrescoDocument(response.entry);
+            Logger.info('Folder created successfully', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'createFolder',
+                data: { folderId: folder.id }
+            });
+            return folder;
+        } catch (error) {
+            Logger.error('Failed to create folder', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'createFolder',
+                data: { parentId, name }
+            }, error as Error);
+            throw this.createError('Failed to create folder', error);
+        }
+    }
+
+    async deleteFolder(folderId: string): Promise<void> {
+        try {
+            Logger.info('Deleting folder', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'deleteFolder',
+                data: { folderId }
+            });
+
+            await this.makeRequest(
+                `/api/-default-/public/alfresco/versions/1/nodes/${folderId}`,
+                { method: 'DELETE' }
+            );
+
+            Logger.info('Folder deleted successfully', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'deleteFolder',
+                data: { folderId }
+            });
+        } catch (error) {
+            Logger.error('Failed to delete folder', {
+                dms: 'Alfresco',
+                service: 'DocumentService',
+                method: 'deleteFolder',
+                data: { folderId }
+            }, error as Error);
+            throw this.createError('Failed to delete folder', error);
+        }
+    }}

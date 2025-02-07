@@ -4,13 +4,13 @@ import { Platform } from 'react-native';
 import { BaseService } from './BaseService';
 import { ApiUtils } from '../utils/ApiUtils';
 import { AuthResponse, UserProfile } from '../../../types';
+import { Logger } from '../../../../utils/Logger';
 
 // Configuration constants
 const CONFIG = {
     TIMEOUT: 30000, // 30 seconds timeout
     MAX_RETRIES: 3,
     RETRY_DELAY: 2000, // Base delay of 2 seconds between retries
-    LOG_PREFIX: '[AuthService]'
 };
 
 // Type definitions for API responses
@@ -43,7 +43,11 @@ export class AuthService extends BaseService {
 
     setToken(token: string): void {
         this.apiUtils.setToken(token);
-        this.logOperation('Token set successfully');
+        Logger.info('Token set successfully', {
+            dms: 'Alfresco',
+            service: 'AuthService',
+            method: 'setToken'
+        });
     }
 
     /**
@@ -57,9 +61,24 @@ export class AuthService extends BaseService {
      * Logging utilities with consistent formatting
      */
     private log = {
-        info: (message: string, data?: any) => console.log(`${CONFIG.LOG_PREFIX} ${message}`, data || ''),
-        error: (message: string, error?: any) => console.error(`${CONFIG.LOG_PREFIX} ${message}`, error || ''),
-        debug: (message: string, data?: any) => console.debug(`${CONFIG.LOG_PREFIX} ${message}`, data || '')
+        info: (message: string, data?: any) => Logger.info(message, {
+            dms: 'Alfresco',
+            service: 'AuthService',
+            method: 'log.info',
+            data
+        }),
+        error: (message: string, error?: any) => Logger.error(message, {
+            dms: 'Alfresco',
+            service: 'AuthService',
+            method: 'log.error',
+            data: error
+        }, error instanceof Error ? error : undefined),
+        debug: (message: string, data?: any) => Logger.debug(message, {
+            dms: 'Alfresco',
+            service: 'AuthService',
+            method: 'log.debug',
+            data
+        })
     };
 
     /**
@@ -76,7 +95,6 @@ export class AuthService extends BaseService {
         });
         return { controller, timeoutPromise };
     }
-
     /**
      * Protected request handler that adds necessary headers and timeout
      * Works across all platforms (web, iOS, and Android)

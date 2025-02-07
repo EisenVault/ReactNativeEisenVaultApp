@@ -1,5 +1,6 @@
 // src/api/providers/angora/services/SearchService.ts
 
+import { Logger } from '../../../../utils/Logger';
 import { BaseService } from './BaseService';
 import { SearchResult, Document, Folder } from '../../../types';
 import { ApiUtils } from '../utils/ApiUtils';
@@ -78,10 +79,15 @@ export class SearchService extends BaseService {
      */
     async search(query: string, params?: Partial<SearchParams>): Promise<SearchResult> {
         try {
-            this.logOperation('search', { query, params });
+            Logger.info('Performing search', {
+                dms: 'Angora',
+                service: 'SearchService',
+                method: 'search',
+                data: { query, params }
+            });
 
             const queryParams = this.buildSearchParams(query, params);
-            
+
             const response = await this.makeCustomRequest<AngoraSearchResponse>(
                 `api/search?${queryParams}`,
                 {
@@ -97,11 +103,16 @@ export class SearchService extends BaseService {
             }
 
             const results = this.processSearchResults(response.data);
-            
-            this.logOperation('search successful', {
-                query,
-                documentsFound: results.documents.length,
-                foldersFound: results.folders.length
+
+            Logger.info('Search successful', {
+                dms: 'Angora',
+                service: 'SearchService',
+                method: 'search',
+                data: {
+                    query,
+                    documentsFound: results.documents.length,
+                    foldersFound: results.folders.length
+                }
             });
 
             return {
@@ -109,11 +120,15 @@ export class SearchService extends BaseService {
                 totalItems: response.pagination?.total_items ?? (results.documents.length + results.folders.length)
             };
         } catch (error) {
-            this.logError('search failed', error);
+            Logger.error('Search failed', {
+                dms: 'Angora',
+                service: 'SearchService',
+                method: 'search',
+                data: { query }
+            }, error instanceof Error ? error : undefined);
             throw this.createError('Search failed', error);
         }
     }
-
     /**
      * Search for documents only
      * @param query - Search query string
@@ -228,7 +243,10 @@ export class SearchService extends BaseService {
             lastModified: item.modified_at,
             createdBy: item.created_by?.display_name ?? '',
             modifiedBy: item.modified_by?.display_name ?? '',
-            isOfflineAvailable: false
+            isOfflineAvailable: false,
+            isFolder: false,
+            isDepartment: false,
+            modifiedAt: item.modified_at
         };
     }
 
