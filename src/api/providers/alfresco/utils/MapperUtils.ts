@@ -1,6 +1,6 @@
 // src/api/providers/alfresco/utils/MapperUtils.ts
 
-import { Document, Folder, UserProfile } from '../../../types';
+import { Department, Document, Folder, UserProfile } from '../../../types';
 
 /**
  * Utility class for mapping Alfresco API responses to our application types
@@ -17,7 +17,7 @@ export class MapperUtils {
             if (!entry) {
                 throw new Error('No entry provided for document mapping');
             }
-    
+
             return {
                 id: entry.id,
                 name: entry.name,
@@ -27,7 +27,11 @@ export class MapperUtils {
                 lastModified: entry.modifiedAt,
                 createdBy: this.getDisplayName(entry.createdByUser),
                 modifiedBy: this.getDisplayName(entry.modifiedByUser),
-                isOfflineAvailable: false
+                isOfflineAvailable: false,
+                isDepartment: false,
+                createdAt: entry.createdAt,
+                modifiedAt: entry.modifiedAt,
+                isFolder: false
             };
         } catch (error: unknown) {  // Type the error as 'unknown'
             // Check if the error is an instance of Error before accessing its properties
@@ -53,14 +57,15 @@ export class MapperUtils {
             if (!entry) {
                 throw new Error('No entry provided for folder mapping');
             }
-    
+            console.log('MapperUtils.mapAlfresco Folder -- Mapping folder:', entry);
+            console.log('MapperUtils.mapAlfresco Folder -- Mapping NodeID:', entry.entry.id);
             return {
-                id: entry.id,
-                name: entry.name,
+                id: entry.entry.id,
+                name: entry.entry.name,
                 path: entry.path?.name || '',
-                parentId: entry.parentId,
-                createdBy: this.getDisplayName(entry.createdByUser),
-                modifiedBy: this.getDisplayName(entry.modifiedByUser)
+                parentId: entry.entry.parentId,
+                createdBy: entry.entry.createdByUser?.displayName || '',
+                modifiedBy: entry.entry.modifiedByUser?.displayName || ''
             };
         } catch (error: unknown) {  // Type the error as 'unknown'
             // Check if the error is an instance of Error before accessing its properties
@@ -201,22 +206,27 @@ static mapAlfrescoDocuments(entries: any[]): Document[] {
     return entries.map(entry => this.mapAlfrescoDocument(entry));
 }
 
-static mapAlfrescoSites(entries: any[]): Document[] {
-    return entries.map(entry => ({
-        id: entry.entry.id,
+static mapDepartments(entries: any[]): Department[] {
+    if (!entries) {
+        return [];
+    }
+
+    return entries.map(entry => (this.mapDepartment(entry)));
+}
+
+
+static mapDepartment(entry: any): Department {
+    console.log('mapDepartment - before mapping - ', { entry });
+    const dept = {
+        id: entry.entry.guid,
         name: entry.entry.title,
-        description: entry.entry.description,
         path: `/sites/${entry.entry.id}`,
-        mimeType: 'folder',
-        size: 0,
-        lastModified: entry.entry.modifiedAt || new Date().toISOString(),
-        createdAt: entry.entry.createdAt || new Date().toISOString(),
-        isFolder: true,
         isDepartment: true,
         createdBy: entry.entry.visibility,
-        modifiedBy: '', // Add missing property
-        isOfflineAvailable: false // Add missing property
-    }));
+    };
+    console.log('mapDepartment - after mapping - ', { dept });
+
+    return dept;
 }
 
 }

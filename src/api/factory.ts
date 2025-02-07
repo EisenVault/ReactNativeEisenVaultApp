@@ -35,6 +35,7 @@ export class DMSFactory {
    * @throws Error if an unsupported provider type is requested
    */
   static createProvider(type: ProviderType, config: ApiConfig): DMSProvider {
+    console.log('DMSFactory: Creating provider of type:', type);
     switch (type) {
       case 'angora':
         return new AngoraProvider(config);

@@ -161,6 +161,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onLoginSuccess }) => {
  * Checks for existing setup and attempts auto-login
  */
 const checkExistingSetup = async (): Promise<void> => {
+    console.log('SetupWizard: Checking existing setup');
     try {
         const [storedToken, storedUrl, storedType] = await Promise.all([
             AsyncStorage.getItem(StorageKeys.AUTH_TOKEN),
@@ -236,7 +237,7 @@ const handleLogin = async (): Promise<void> => {
         // Update Redux state
         dispatch(setAuthTokenAction(response.token));
         dispatch(setServerUrlAction(instanceUrl));
-        dispatch(setUserProfile(response.user));
+        dispatch(setUserProfile(response.userProfile));
         dispatch(setProviderType(providerTypeValue));
 
         onLoginSuccess();

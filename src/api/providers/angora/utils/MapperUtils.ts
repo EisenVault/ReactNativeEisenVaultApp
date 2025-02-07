@@ -11,6 +11,8 @@ export class MapperUtils {
      * @returns A Document object.
      */
     static mapAngoraDocument(entry: any): Document {
+        console.log('Mapping Angora document:', entry);
+        console.log('Entry ID:', entry.id);
         return {
             id: entry.id,
             name: entry.name,
@@ -20,7 +22,10 @@ export class MapperUtils {
             lastModified: entry.modified_at,
             createdBy: entry.created_by?.display_name || '',
             modifiedBy: entry.modified_by?.display_name || '',
-            isOfflineAvailable: false
+            isOfflineAvailable: false,
+            isDepartment: false,
+            isFolder: false,
+            modifiedAt: entry.modified_at
         };
     }
 

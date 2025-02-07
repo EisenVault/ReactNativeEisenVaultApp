@@ -30,6 +30,7 @@ export class AlfrescoProvider implements DMSProvider {
 
     async login(username: string, password: string): Promise<AuthResponse> {
         const authResponse = await this.authService.login(username, password);
+        console.log('Token after login:', authResponse.token);
         return {
             token: authResponse.token,
             userProfile: authResponse.userProfile
@@ -37,7 +38,14 @@ export class AlfrescoProvider implements DMSProvider {
     }
 
     async getDepartments(): Promise<Department[]> {
-        return this.departmentService.getDepartments();
+        try {
+            const departments = await this.departmentService.getDepartments();
+            console.log('Departments fetched:', departments);
+            return departments;
+        } catch (error) {
+            console.error('Failed to fetch departments:', error);
+            throw error;
+        }
     }
 
     async getDepartment(departmentId: string): Promise<Department> {
@@ -45,6 +53,7 @@ export class AlfrescoProvider implements DMSProvider {
     }
 
     async getFolders(departmentId: string): Promise<Folder[]> {
+        console.log('In AlfrescoProvider.getFolders - Fetching folders for department:', departmentId);
         const response = await this.documentService.getDocuments(departmentId);
         return response
             .filter(item => item.isFolder)
@@ -62,6 +71,7 @@ export class AlfrescoProvider implements DMSProvider {
     }
     
     async getDocuments(folderId: string): Promise<Document[]> {
+        console.log('In AlfrescoProvider.getDocyments - Fetching documents for folder:', folderId);
         const response = await this.documentService.getDocuments(folderId);
         return response.filter(doc => !doc.isFolder).map(doc => ({
             id: doc.id,
@@ -194,3 +204,4 @@ export class AlfrescoProvider implements DMSProvider {
     }
     
 }
+

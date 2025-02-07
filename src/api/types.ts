@@ -14,6 +14,7 @@ export interface Department {
   createdBy?: string;
   editedBy?: string;
   rawFileName?: string;
+  path?: string;
 }
 
 /**

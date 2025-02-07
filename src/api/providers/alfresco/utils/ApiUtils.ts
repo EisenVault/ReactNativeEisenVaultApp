@@ -104,7 +104,7 @@ export class ApiUtils {
             if (!response.ok) {
                 throw await this.handleErrorResponse(response);
             }
-
+            
             return response;
 
         } catch (error: unknown) {

@@ -21,7 +21,9 @@ export class DocumentService extends BaseService {
 
     async getDocuments(folderId: string): Promise<Document[]> {
         try {
+            console.log('DocumentService: Starting document fetch for folder:', folderId);
             const nodeId = folderId === 'root' ? '-root-' : folderId;
+            console.log('DocumentService: Using nodeId:', nodeId);
             const queryParams = new URLSearchParams({
                 include: ['path', 'properties', 'allowableOperations'].join(',')
             });
@@ -34,7 +36,7 @@ export class DocumentService extends BaseService {
                 throw new Error('Invalid response format');
             }
 
-            return MapperUtils.mapAlfrescoDocuments(response.list.entries);
+            return response.list.entries.map(entry => MapperUtils.mapAlfrescoDocument(entry));
         } catch (error) {
             this.logError('getDocuments', error);
             throw this.createError('Failed to get documents', error);
