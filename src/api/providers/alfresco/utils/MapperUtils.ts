@@ -1,12 +1,50 @@
 // src/api/providers/alfresco/utils/MapperUtils.ts
 
-import { Department, Document, Folder, UserProfile } from '../../../types';
+import { Department, Document, Folder, UserProfile, BrowseItem } from '../../../types';
+import { AlfrescoNodesResponse } from '../types';
 
 /**
  * Utility class for mapping Alfresco API responses to our application types
  * Provides consistent data transformation across the application
  */
+ 
+import { Logger } from '../../../../utils/Logger';
+
 export class MapperUtils {
+    static mapAlfrescoBrowseItem(entry: AlfrescoNodesResponse['list']['entries'][0]['entry']): BrowseItem {
+        Logger.debug('Mapping Alfresco node to BrowseItem', {
+            dms: 'Alfresco',
+            util: 'MapperUtils',
+            method: 'mapAlfrescoBrowseItem',
+            data: { entry }
+        });
+
+        const browseItem: BrowseItem = {
+            id: entry.id,
+            name: entry.name,
+            path: entry.path?.elements ? entry.path.elements.map(el => el.name).join('/') : '',
+            isFolder: entry.isFolder,
+            mimeType: entry.content?.mimeType || 'application/octet-stream',  // Default mime type
+            size: entry.content?.sizeInBytes || 0,
+            lastModified: entry.modifiedAt,
+            createdAt: entry.createdAt,
+            createdBy: entry.createdByUser?.displayName || '',
+            modifiedBy: entry.modifiedByUser?.displayName || '',
+            allowableOperations: entry.allowableOperations || [],
+            type: entry.isFolder ? 'folder' : 'file',
+            data: entry
+        };
+
+        Logger.debug('Successfully mapped Alfresco node', {
+            dms: 'Alfresco',
+            util: 'MapperUtils',
+            method: 'mapAlfrescoBrowseItem',
+            data: { nodeId: entry.id, result: browseItem }
+        });
+
+        return browseItem;
+    }
+
     /**
      * Maps Alfresco document node to our Document interface
      * @param entry - Raw document data from Alfresco

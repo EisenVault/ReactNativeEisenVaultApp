@@ -145,9 +145,12 @@ export interface DMSProvider {
   getFolders(parentId: string, filters?: { nodeType?: string }): Promise<Folder[]>;
   createFolder(parentId: string, name: string): Promise<Folder>;
   deleteFolder(folderId: string): Promise<void>;
+  getChildren(parentId: string): Promise<BrowseItem[]>;
   
   // Search Operations
   search(query: string): Promise<SearchResult>;
+
+  
 }
 
 export interface AlfrescoDocumentsResponse {
@@ -181,4 +184,20 @@ export interface AlfrescoDocumentsResponse {
             maxItems: number;
         };
     };
+}
+
+export interface BrowseItem {
+    id: string;
+    name: string;
+    path: string;
+    isFolder: boolean;
+    mimeType?: string;
+    size?: number;
+    lastModified: string;
+    createdAt: string;
+    createdBy: string;
+    modifiedBy: string;
+    allowableOperations: string[];
+    type: 'folder' | 'file' | 'department';
+    data: any;
 }

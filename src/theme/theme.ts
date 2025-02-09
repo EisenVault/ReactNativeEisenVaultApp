@@ -47,6 +47,10 @@ export const colors = {
   // Border colors
   border: '#e5e7eb',
   divider: '#f1f5f9',
+
+  imageFile: '#4CAF50',    // Green for images
+  pdfFile: '#E53935',      // Red for PDFs
+  defaultFile: '#757575'    // Gray for other files
 };
 
 /**

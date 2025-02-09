@@ -72,7 +72,7 @@ export class AuthService extends BaseService {
 
             return {
                 token,
-                user: userProfile
+                userProfile: userProfile
             };
 
         } catch (error) {

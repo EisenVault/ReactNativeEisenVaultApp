@@ -16,7 +16,7 @@ export class DepartmentService extends BaseService {
             const queryParams = new URLSearchParams({
                 skipCount: '0',
                 maxItems: '100',
-                fields: ['id', 'title', 'description', 'visibility'].join(',')
+                fields: ['id', 'title', 'description', 'visibility', 'guid'].join(',')
             });
 
             const response = await this.makeRequest<{ list: { entries: any[] } }>(
@@ -62,7 +62,7 @@ export class DepartmentService extends BaseService {
             });
             
             const queryParams = new URLSearchParams({
-                fields: ['id', 'title', 'description', 'visibility'].join(',')
+                fields: ['id', 'title', 'description', 'visibility', 'guid'].join(',')
             });
 
             const response = await this.makeRequest<{ entry: any }>(

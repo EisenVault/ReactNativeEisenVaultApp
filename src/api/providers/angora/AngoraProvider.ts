@@ -8,6 +8,7 @@ import {
     SearchResult,
     ApiConfig,
     DMSProvider,
+    BrowseItem,
     Department // Add this import
 } from '../../types';
 
@@ -19,6 +20,9 @@ import {
     SearchService,
     DepartmentService // Ensure this matches the actual file name and path
 } from './services';
+
+import { BrowseService } from './services/BrowseService';
+
  /**
  * Implementation of the DMSProvider interface for Angora DMS
  * Handles all operations including authentication, document/folder management,
@@ -31,6 +35,7 @@ export class AngoraProvider implements DMSProvider {
     private searchService: SearchService;
     private departmentService: DepartmentService;
     private apiUtils: ApiUtils;
+    private browseService: BrowseService;
 
     constructor(config: ApiConfig) {
         // Initialize utility class and validate config
@@ -46,6 +51,11 @@ export class AngoraProvider implements DMSProvider {
         this.folderService = new FolderService(config.baseUrl, this.apiUtils);
         this.searchService = new SearchService(config.baseUrl, this.apiUtils);
         this.departmentService = new DepartmentService(config.baseUrl, this.apiUtils);
+        this.browseService = new BrowseService(config.baseUrl, this.apiUtils);
+    }
+
+    get browse(): BrowseService {
+        return this.browseService;
     }
 
     /**
@@ -72,6 +82,22 @@ export class AngoraProvider implements DMSProvider {
             this.setToken(null);
             throw error;
         }
+    }
+    /**
+     * Retrieves the children of a parent node
+     * @param parentId - ID of the parent node
+     * @returns Promise resolving to array of BrowseItem objects
+     * @throws Error if fetching children fails
+     * @remarks
+     * This method is used to fetch the children of a parent node in the DMS.
+     * The parent node can be a folder or a department, depending on the DMS implementation.
+     * The returned array contains the child items, which can be folders or documents.
+     * Each item should have an ID, name, type, and other relevant metadata.
+     * The parent node ID can be null to fetch the root level items.
+     *
+     */
+    async getChildren(parentId: string): Promise<BrowseItem[]> {
+        return this.browseService.getChildren(parentId);
     }
 
     /**

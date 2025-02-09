@@ -5,7 +5,8 @@ import { ApiUtils } from './utils/ApiUtils';
 import { AuthService } from './services/AuthService';
 import { DocumentService } from './services/DocumentService';
 import { DepartmentService } from './services/DepartmentService';
-import { AuthResponse, Department, Document, Folder, SearchResult } from '../../types';
+import { BrowseService } from './services/BrowseService';
+import { AuthResponse, Department, Document, Folder, SearchResult, BrowseItem } from '../../types';
 /**
  * AlfrescoProvider implements the DMSProvider interface for Alfresco Content Services.
  * Handles all DMS operations including authentication, document management,
@@ -16,13 +17,20 @@ export class AlfrescoProvider implements DMSProvider {
     private authService: AuthService;
     private documentService: DocumentService;
     private departmentService: DepartmentService;
-
+    private browseService: BrowseService;
+    
     constructor(config: ApiConfig) {
         const apiUtils = new ApiUtils(config);
         this.authService = new AuthService(config.baseUrl, apiUtils);
         this.documentService = new DocumentService(config.baseUrl, apiUtils);
         this.departmentService = new DepartmentService(config.baseUrl, apiUtils);
+        this.browseService = new BrowseService(config.baseUrl, apiUtils);
     }
+
+    get auth(): AuthService { return this.authService; }
+    get documents(): DocumentService { return this.documentService; }
+    get departments(): DepartmentService { return this.departmentService; }
+    get browse(): BrowseService { return this.browseService; }
 
     setToken(token: string): void {
         this.authService.setToken(token);
@@ -30,11 +38,16 @@ export class AlfrescoProvider implements DMSProvider {
 
     async login(username: string, password: string): Promise<AuthResponse> {
         const authResponse = await this.authService.login(username, password);
-        console.log('Token after login:', authResponse.token);
+        if (!authResponse.token) {
+            throw new Error('Authentication failed');
+        }
         return {
             token: authResponse.token,
             userProfile: authResponse.userProfile
         };
+    }
+    async getChildren(parentId: string): Promise<BrowseItem[]> {
+        return this.browseService.getChildren(parentId);
     }
 
     async getDepartments(): Promise<Department[]> {

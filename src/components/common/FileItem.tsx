@@ -8,7 +8,7 @@ import theme from '../../theme/theme';
 
 interface FileItemProps {
   file: Document;
-  onPress: () => void;
+  onPress: (file: Document) => void;
 }
 
 interface Styles {
@@ -41,72 +41,58 @@ const FileItem: React.FC<FileItemProps> = ({ file, onPress }) => {
     });
   };
 
-  const getIconColor = (mimeType: string): string => {
-    if (mimeType.startsWith('image/')) return theme.colors.accent;
-    if (mimeType.includes('pdf')) return theme.colors.error;
-    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return theme.colors.success;
-    return theme.colors.secondary;
-  };
-
+const getIconColor = (mimeType: string = 'application/octet-stream'): string => {
+  if (mimeType.startsWith('image/')) {
+      return theme.colors.imageFile;
+  }
+  if (mimeType.startsWith('application/pdf')) {
+      return theme.colors.pdfFile;
+  }
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return theme.colors.success;
+  return theme.colors.defaultFile;
+};
   return (
-    <TouchableOpacity 
-      style={styles.container} 
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.iconContainer}>
-        <FileText 
-          size={24} 
-          color={getIconColor(file.mimeType)}
-        />
-      </View>
-      <View style={styles.content}>
-        <Text style={styles.name} numberOfLines={1}>{file.name}</Text>
-        <Text style={styles.details}>
-          {formatFileSize(file.size)} • Modified {formatDate(file.lastModified)}
-        </Text>
-      </View>
-    </TouchableOpacity>
+      <TouchableOpacity 
+          onPress={() => onPress(file)}
+          style={styles.container}
+      >
+          <FileText
+              size={24} 
+              color={getIconColor(file.mimeType)} 
+          />
+          <Text style={styles.name}>{file.name}</Text>
+      </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create<Styles>({
   container: {
-    flexDirection: 'row',
-    padding: theme.spacing.base,
-    backgroundColor: theme.colors.cardBackground,
-    borderRadius: 8,
-    marginBottom: theme.spacing.sm,
-    ...(Platform.OS === 'ios' ? {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.2,
-      shadowRadius: 1.41,
-    } : {
-      elevation: 2,
-    }),
+      flexDirection: 'row',
+      padding: theme.spacing.base,
+      backgroundColor: theme.colors.cardBackground,
+      borderRadius: 8,
+      marginBottom: theme.spacing.sm,
+      alignItems: 'center'
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: theme.spacing.base,
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: theme.spacing.base
   },
   content: {
-    flex: 1,
-    justifyContent: 'center',
+      flex: 1,
+      justifyContent: 'center'
   },
   name: {
-    fontSize: theme.typography.sizes.base,
-    fontWeight: '500',
-    color: theme.colors.textPrimary,
-    marginBottom: theme.spacing.xs,
+      fontSize: theme.typography.sizes.base,
+      color: theme.colors.textPrimary,
+      marginLeft: theme.spacing.base
   },
   details: {
-    fontSize: theme.typography.sizes.sm,
-    color: theme.colors.textSecondary,
-  },
+      fontSize: theme.typography.sizes.sm,
+      color: theme.colors.textSecondary
+  }
 });
-
 export default FileItem;

@@ -33,6 +33,7 @@ import {
 import { DMSFactory, ApiConfig } from '../../api';
 import { ChevronRight, ChevronLeft, Server, Key } from 'lucide-react-native';
 import theme from '../../theme/theme';
+import { Logger } from '@/src/utils/Logger';
 
 // Window dimensions for responsive design
 const windowWidth = Dimensions.get('window').width;
@@ -134,7 +135,9 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onLoginSuccess }) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        checkExistingSetup();
+        //Disabling this for debugging purposes
+        //TODO to be enabled later
+        //checkExistingSetup();
     }, []);
 
     /**
@@ -153,6 +156,14 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onLoginSuccess }) => {
             }
             return formattedUrl;
         } catch (error) {
+            Logger.error(
+                'Error',
+                {
+                    component: 'SetupWizard',
+                    method: 'formatAndValidateUrl',
+                    data: error
+                }
+            );
             return null;
         }
     };
@@ -161,7 +172,14 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onLoginSuccess }) => {
  * Checks for existing setup and attempts auto-login
  */
 const checkExistingSetup = async (): Promise<void> => {
-    console.log('SetupWizard: Checking existing setup');
+    Logger.debug(
+            'Inside checkExistingSetup',
+            {
+                component: 'SetupWizard',
+                method: 'checkExistingSetup'
+            }
+
+    );
     try {
         const [storedToken, storedUrl, storedType] = await Promise.all([
             AsyncStorage.getItem(StorageKeys.AUTH_TOKEN),
@@ -199,7 +217,15 @@ const checkExistingSetup = async (): Promise<void> => {
             }
         }
     } catch (error) {
-        console.error('Setup check failed:', error);
+        
+        Logger.error(
+            'Inside  Setup check failed',
+            {
+                component: 'SetupWizard',
+                method: 'checkExistingSetup',
+                data: error
+            }
+        );
     }
 };
 
@@ -257,6 +283,15 @@ const handleLogin = async (): Promise<void> => {
         }
         
         setError(errorMessage);
+        Logger.error(
+            errorMessage,
+            {
+                component: 'SetupWizard',
+                method: 'handleLogin',
+                data: error
+            }
+        );
+        
     } finally {
         setLoading(false);
     }

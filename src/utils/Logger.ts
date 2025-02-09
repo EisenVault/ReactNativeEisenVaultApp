@@ -3,11 +3,11 @@
  * Provides consistent formatting and context for all log messages
  */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-type DMSType = 'Alfresco' | 'Angora';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type DMSType = 'Alfresco' | 'Angora';
 
 interface LogContext {
-    dms: DMSType;           // DMS backend type (required)
+    dms?: DMSType;           // DMS backend type (required)
     component?: string;     // UI component name
     service?: string;       // Service class name
     util?: string;         // Utility class name

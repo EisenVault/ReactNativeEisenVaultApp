@@ -1,5 +1,7 @@
 // Import necessary types
-import { Document, Folder, SearchResult } from '../../../types';
+import { Document, Folder, SearchResult, BrowseItem } from '../../../types';
+import { AngoraNodesResponse } from '../types';
+import { Logger } from '../../../../utils/Logger';
 
 /**
  * MapperUtils class provides static methods to map API responses to application-specific types.
@@ -80,7 +82,36 @@ export class MapperUtils {
                 folders.push(this.mapAngoraFolder(item));
             }
         });
-
         return { documents, folders };
+    }
+
+    static mapAngoraBrowseItems(data: AngoraNodesResponse['data']): BrowseItem[] {
+        Logger.debug('Mapping Angora nodes to BrowseItems', {
+            dms: 'Angora',
+            util: 'MapperUtils',
+            method: 'mapAngoraBrowseItems',
+            data: { count: data.length }
+        });
+
+        const browseItems = data.map(item => {
+            const browseItem: BrowseItem = {
+                id: item.id,
+                name: item.name,
+                path: item.path,
+                isFolder: item.type === 'folder',
+                mimeType: item.mimeType,
+                size: item.size,
+                lastModified: item.modifiedAt,
+                createdAt: item.createdAt,
+                createdBy: item.createdBy.displayName,
+                modifiedBy: item.modifiedBy.displayName,
+                allowableOperations: item.permissions,
+                type: item.type === 'folder' ? 'folder' : 'file',
+                data: item
+            };
+            return browseItem;
+        });
+
+        return browseItems;
     }
 }
