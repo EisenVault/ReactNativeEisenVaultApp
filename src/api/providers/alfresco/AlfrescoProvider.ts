@@ -46,8 +46,8 @@ export class AlfrescoProvider implements DMSProvider {
             userProfile: authResponse.userProfile
         };
     }
-    async getChildren(parentId: string): Promise<BrowseItem[]> {
-        return this.browseService.getChildren(parentId);
+    async getChildren(parent: BrowseItem): Promise<BrowseItem[]> {
+        return this.browseService.getChildren(parent);
     }
 
     async getDepartments(): Promise<Department[]> {
@@ -66,41 +66,59 @@ export class AlfrescoProvider implements DMSProvider {
     }
 
     async getFolders(departmentId: string): Promise<Folder[]> {
-        console.log('In AlfrescoProvider.getFolders - Fetching folders for department:', departmentId);
         const response = await this.documentService.getDocuments(departmentId);
         return response
             .filter(item => item.isFolder)
-            .map(item => ({
-                id: item.id,
-                name: item.name,
-                path: item.path,
-                parentId: departmentId,
-                createdAt: item.createdAt,
-                createdBy: item.createdBy,
-                modifiedAt: item.lastModified,
-                modifiedBy: item.modifiedBy,
-                isDepartment: false
-            }));
+            .map(item => {
+                const folder: Folder = {
+                    id: item.id,
+                    name: item.name,
+                    path: item.path,
+                    parentId: departmentId,
+                    createdAt: item.createdAt || new Date().toISOString(),
+                    modifiedAt: item.modifiedAt || new Date().toISOString(),
+                    createdBy: item.createdBy,
+                    modifiedBy: item.modifiedBy,
+                    isDepartment: false,
+                    isFolder: true,
+                    mimeType: 'application/vnd.folder',
+                    size: 0,
+                    lastModified: item.modifiedAt || new Date().toISOString(),
+                    allowableOperations: item.allowableOperations || [],
+                    type: 'folder' as const,
+                    data: null as any
+                };
+                folder.data = folder;
+                return folder;
+            });
     }
     
     async getDocuments(folderId: string): Promise<Document[]> {
-        console.log('In AlfrescoProvider.getDocyments - Fetching documents for folder:', folderId);
         const response = await this.documentService.getDocuments(folderId);
-        return response.filter(doc => !doc.isFolder).map(doc => ({
-            id: doc.id,
-            name: doc.name,
-            path: doc.path,
-            mimeType: doc.mimeType,
-            size: doc.size,
-            lastModified: doc.lastModified,
-            createdAt: doc.createdAt,
-            createdBy: doc.createdBy,
-            modifiedBy: doc.modifiedBy,
-            isFolder: false,
-            modifiedAt: doc.modifiedAt,
-            isOfflineAvailable: doc.isOfflineAvailable,
-            isDepartment: false
-        }));
+        return response
+            .filter(doc => !doc.isFolder)
+            .map(doc => {
+                const document: Document = {
+                    id: doc.id,
+                    name: doc.name,
+                    path: doc.path,
+                    mimeType: doc.mimeType || 'application/octet-stream',
+                    size: doc.size || 0,
+                    lastModified: doc.lastModified,
+                    createdBy: doc.createdBy,
+                    modifiedBy: doc.modifiedBy,
+                    isOfflineAvailable: false,
+                    isDepartment: false,
+                    isFolder: false,
+                    createdAt: doc.createdAt || new Date().toISOString(),
+                    modifiedAt: doc.modifiedAt,
+                    allowableOperations: doc.allowableOperations || [],
+                    type: 'file' as const,
+                    data: null as any
+                };
+                document.data = document;
+                return document;
+            });
     }
     
 
@@ -178,17 +196,26 @@ export class AlfrescoProvider implements DMSProvider {
     }
     async createFolder(parentId: string, name: string): Promise<Folder> {
         const response = await this.documentService.createFolder(parentId, name);
-        return {
+        const folder: Folder = {
             id: response.id,
             name: response.name,
             path: response.path,
             parentId: parentId,
-            createdAt: response.createdAt,
+            createdAt: response.createdAt || new Date().toISOString(),
+            modifiedAt: response.modifiedAt || new Date().toISOString(),
             createdBy: response.createdBy,
-            modifiedAt: response.lastModified,
             modifiedBy: response.modifiedBy,
-            isDepartment: false
+            isDepartment: false,
+            isFolder: true,
+            mimeType: 'application/vnd.folder',
+            size: 0,
+            lastModified: response.modifiedAt || new Date().toISOString(),
+            allowableOperations: response.allowableOperations || [],
+            type: 'folder' as const,
+            data: null as any
         };
+        folder.data = folder;
+        return folder;
     }
     async deleteFolder(folderId: string): Promise<void> {
         await this.documentService.deleteFolder(folderId);
@@ -203,17 +230,26 @@ export class AlfrescoProvider implements DMSProvider {
     }
     
     private mapToFolder(doc: Document): Folder {
-        return {
+        const folder: Folder = {
             id: doc.id,
             name: doc.name,
             path: doc.path,
-            parentId: doc.path.split('/').slice(-2, -1)[0],
+            parentId: doc.path.split('/').slice(-2, -1)[0] || '',
             createdAt: doc.createdAt,
+            modifiedAt: doc.modifiedAt,
             createdBy: doc.createdBy,
-            modifiedAt: doc.lastModified,
             modifiedBy: doc.modifiedBy,
-            isDepartment: false
+            isDepartment: false,
+            isFolder: true,
+            mimeType: 'application/vnd.folder',
+            size: 0,
+            lastModified: doc.modifiedAt,
+            allowableOperations: doc.allowableOperations,
+            type: 'folder' as const,
+            data: null as any
         };
+        folder.data = folder;
+        return folder;
     }
     
 }

@@ -18,18 +18,13 @@ import { RootState } from '../../store/store';
 import FileItem from '../common/FileItem';
 import FolderItem from '../common/FolderItem';
 import DepartmentItem from '../common/DepartmentItem';
-import { Document, Folder, Department, DMSProvider } from '../../api/types';
+import { Document, Folder, Department, DMSProvider, BrowseItem } from '../../api/types';
 import { DMSFactory, ApiConfig } from '../../api';
 import { ChevronLeft, Home } from 'lucide-react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import theme from '../../theme/theme';
 import { Logger, DMSType } from '@/src/utils/Logger';
 
-interface BrowseItem {
-    id: string;
-    type: 'file' | 'folder' | 'department';
-    data: Document | Folder | Department;
-}
 
 interface Styles {
     container: ViewStyle;
@@ -56,8 +51,9 @@ const BrowseScreen: React.FC = () => {
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [items, setItems] = useState<BrowseItem[]>([]);
-    const [currentDepartmentId, setCurrentDepartmentId] = useState<string>('');
-    const [currentFolderId, setCurrentFolderId] = useState<string>('');
+    //const [currentDepartmentId, setCurrentDepartmentId] = useState<string>('');
+    //const [currentFolderId, setCurrentFolderId] = useState<string>('');
+    const [currentBrowseItem, setCurrentBrowseItem] = useState<BrowseItem | null>(null);
     const [breadcrumbs, setBreadcrumbs] = useState<Array<Department | Folder>>([]);
     const [provider, setProvider] = useState<DMSProvider | null>(null);
     
@@ -114,7 +110,7 @@ const BrowseScreen: React.FC = () => {
         };
     }, [isAuthenticated, serverUrl, authToken, providerType]);
 
-    const loadContents = async (parentId: string) => {
+    const loadContents = async (parent: BrowseItem) => {
         try {
             setIsLoading(true);
             setError(null);
@@ -123,7 +119,7 @@ const BrowseScreen: React.FC = () => {
                 throw new Error('Provider not initialized');
             }
 
-            const items = await provider.getChildren(parentId);
+            const items = await provider.getChildren(parent);
             setItems(items);
             
         } catch (err) {
@@ -139,15 +135,16 @@ const BrowseScreen: React.FC = () => {
     };
 
     useEffect(() => {
-        if (provider && (currentDepartmentId || currentFolderId)) {
-            loadContents(currentFolderId || currentDepartmentId);
+        if (provider && (currentBrowseItem)) {
+            loadContents(currentBrowseItem);
         }
-    }, [provider, currentDepartmentId, currentFolderId]);
+    }, [provider, currentBrowseItem]);
 
     const handleDepartmentPress = async (department: Department): Promise<void> => {
         try {
-            setCurrentDepartmentId(department.id);
-            setCurrentFolderId('');
+            //setCurrentDepartmentId(department.id);
+            //setCurrentFolderId('');
+            setCurrentBrowseItem(department);
             setBreadcrumbs([department]);
         } catch (err) {
             Logger.error(
@@ -165,7 +162,8 @@ const BrowseScreen: React.FC = () => {
     };
     const handleFolderPress = async (folder: Folder): Promise<void> => {
         try {
-            setCurrentFolderId(folder.id);
+            //setCurrentFolderId(folder.id);
+            setCurrentBrowseItem(folder);
             
             if (breadcrumbs.length > 0) {
                 const existingPath = breadcrumbs.map(b => b.id);
@@ -217,26 +215,24 @@ const BrowseScreen: React.FC = () => {
             setBreadcrumbs(newBreadcrumbs);
             
             if (newBreadcrumbs.length === 0) {
-                setCurrentDepartmentId('');
-                setCurrentFolderId('');
+                //setCurrentDepartmentId('');
+                //setCurrentFolderId('');
+                setCurrentBrowseItem(null);
                 if (provider) {
                     loadDepartments(provider);
                 }
             } else {
                 const lastItem = newBreadcrumbs[newBreadcrumbs.length - 1];
-                if ('isDepartment' in lastItem && lastItem.isDepartment) {
-                    setCurrentDepartmentId(lastItem.id);
-                    setCurrentFolderId('');
-                } else {
-                    setCurrentFolderId(lastItem.id);
-                }
+                setCurrentBrowseItem(lastItem);
+            
             }
         }
     };
     const handleHomePress = async (): Promise<void> => {
         setBreadcrumbs([]);
-        setCurrentDepartmentId('');
-        setCurrentFolderId('');
+        //setCurrentDepartmentId('');
+        //setCurrentFolderId('');
+        setCurrentBrowseItem(null);
         if (provider) {
             await loadDepartments(provider);
         }
@@ -254,13 +250,16 @@ const BrowseScreen: React.FC = () => {
                 name: dept.name,
                 path: dept.path || '',
                 isFolder: true,
+                mimeType: 'application/vnd.folder',  // Added mimeType
+                size: 0,                             // Added size
                 createdBy: dept.createdBy || '',
                 modifiedBy: dept.createdBy || '',
-                lastModified: new Date().toISOString(), // Departments might not have this
-                createdAt: new Date().toISOString(),    // Departments might not have this
-                allowableOperations: [],                // Departments might have different permissions
+                lastModified: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
+                allowableOperations: [],
                 type: 'department' as const,
-                data: dept
+                data: dept,
+                isDepartment: true
             }));
             setItems(browseItems);
         } catch (err) {
@@ -276,34 +275,43 @@ const BrowseScreen: React.FC = () => {
     };
 
     const loadCurrentContent = async () => {
-        if (!currentDepartmentId && !currentFolderId) {
+        if (!currentBrowseItem) {
             await loadDepartments(provider!);
             return;
         }
-        await loadContents(currentFolderId || currentDepartmentId);
+        await loadContents(currentBrowseItem);
     };
 
     const renderItem = ({ item }: { item: BrowseItem }): React.ReactElement => {
+        Logger.debug('Rendering browse item:', {
+            component: 'BrowseScreen',
+            method: 'renderItem',
+            data: { type: item.type, name: item.name, id: item.id }
+        });
+
         switch (item.type) {
             case 'department':
+                const departmentData = item.data as Department;
                 return (
                     <DepartmentItem 
-                        department={item.data as Department} 
-                        onPress={() => handleDepartmentPress(item.data as Department)}
+                        department={departmentData}
+                        onPress={() => handleDepartmentPress(departmentData)}
                     />
                 );
             case 'file':
+                const fileData = item.data as Document;
                 return (
                     <FileItem 
-                        file={item.data as Document} 
-                        onPress={() => handleFilePress(item.data as Document)}
+                        file={fileData}
+                        onPress={() => handleFilePress(fileData)}
                     />
                 );
             case 'folder':
+                const folderData = item.data as Folder;
                 return (
                     <FolderItem 
-                        folder={item.data as Folder} 
-                        onPress={() => handleFolderPress(item.data as Folder)}
+                        folder={folderData}
+                        onPress={() => handleFolderPress(folderData)}
                     />
                 );
         }
@@ -338,12 +346,8 @@ const BrowseScreen: React.FC = () => {
                                     onPress={() => {
                                         const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
                                         setBreadcrumbs(newBreadcrumbs);
-                                        if ('isDepartment' in item && item.isDepartment) {
-                                            setCurrentDepartmentId(item.id);
-                                            setCurrentFolderId('');
-                                        } else {
-                                            setCurrentFolderId(item.id);
-                                        }
+                                        setCurrentBrowseItem(item);
+                                        
                                     }}
                                     style={styles.breadcrumbButton}
                                     labelStyle={styles.breadcrumbLabel}
@@ -370,7 +374,7 @@ const BrowseScreen: React.FC = () => {
                     <Button 
                         mode="contained" 
                         onPress={() => {
-                            if (currentDepartmentId || currentFolderId) {
+                            if (currentBrowseItem) {
                                 loadCurrentContent();
                             } else if (provider) {
                                 loadDepartments(provider);
@@ -383,7 +387,7 @@ const BrowseScreen: React.FC = () => {
                 </View>
             ) : (<View style={styles.contentContainer}>
                 {renderBreadcrumbs()}
-                {(currentDepartmentId || currentFolderId) && (
+                {(currentBrowseItem) && (
                     <Button 
                         mode="text"
                         onPress={handleBackPress}
@@ -404,7 +408,7 @@ const BrowseScreen: React.FC = () => {
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <Text style={styles.emptyText}>
-                                {currentDepartmentId || currentFolderId 
+                                {currentBrowseItem && currentBrowseItem.type === 'folder'
                                     ? 'This folder is empty'
                                     : 'No departments available'}
                             </Text>

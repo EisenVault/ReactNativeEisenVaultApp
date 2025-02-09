@@ -1,21 +1,6 @@
 // src/api/types.ts
 
-/**
- * Department interface specific to Angora DMS
- * Represents a top-level organizational unit
- */
-export interface Department {
-  id: string;
-  name: string;
-  description?: string;
-  parentPath?: string;
-  materializePath?: string;
-  isDepartment: boolean;
-  createdBy?: string;
-  editedBy?: string;
-  rawFileName?: string;
-  path?: string;
-}
+
 
 /**
  * Department response from Angora API
@@ -68,39 +53,7 @@ export interface AuthResponse {
   userProfile: UserProfile;
 }
 
-/**
- * Document metadata structure.
- */
-export interface Document {
-  id: string;
-  name: string;
-  path: string;
-  mimeType: string;
-  size: number;
-  lastModified: string;
-  createdBy: string;
-  modifiedBy: string;
-  isOfflineAvailable: boolean;
-  isFolder: boolean;
-  createdAt?: string;
-  modifiedAt: string;
-  isDepartment: boolean;
-}
 
-/**
- * Folder structure for Angora
- */
-export interface Folder {
-  id: string;
-  name: string;
-  path?: string;
-  parentId: string | null;
-  createdAt?: string;
-  createdBy?: string;
-  modifiedAt?: string;
-  modifiedBy?: string;
-  isDepartment?: boolean;
-}
 
 /**
  * Search results structure.
@@ -145,7 +98,7 @@ export interface DMSProvider {
   getFolders(parentId: string, filters?: { nodeType?: string }): Promise<Folder[]>;
   createFolder(parentId: string, name: string): Promise<Folder>;
   deleteFolder(folderId: string): Promise<void>;
-  getChildren(parentId: string): Promise<BrowseItem[]>;
+  getChildren(parent: BrowseItem): Promise<BrowseItem[]>;
   
   // Search Operations
   search(query: string): Promise<SearchResult>;
@@ -187,17 +140,49 @@ export interface AlfrescoDocumentsResponse {
 }
 
 export interface BrowseItem {
-    id: string;
-    name: string;
-    path: string;
-    isFolder: boolean;
-    mimeType?: string;
-    size?: number;
-    lastModified: string;
-    createdAt: string;
-    createdBy: string;
-    modifiedBy: string;
-    allowableOperations: string[];
-    type: 'folder' | 'file' | 'department';
-    data: any;
+  id: string;
+  name: string;
+  path: string;
+  isFolder: boolean;
+  isDepartment: boolean;
+  mimeType: string;
+  size: number;
+  lastModified: string;
+  createdAt: string;
+  createdBy: string;
+  modifiedBy: string;
+  allowableOperations: string[];
+  type: 'folder' | 'file' | 'department';
+  data: Document | Folder | Department;
+}
+
+
+
+export interface Document extends BrowseItem {
+  mimeType: string;
+  size: number;
+  lastModified: string;
+  isOfflineAvailable: boolean;
+  isDepartment: boolean;
+  isFolder: boolean;
+  modifiedAt: string;
+}
+
+export interface Folder extends BrowseItem {
+  parentId: string;
+  createdAt: string;
+  modifiedAt: string;
+}
+
+/**
+ * Department interface specific to Angora DMS
+ * Represents a top-level organizational unit
+ */
+export interface Department extends BrowseItem {
+  description?: string;
+  parentPath?: string;
+  materializePath?: string;
+  editedBy?: string;
+  rawFileName?: string;
+  
 }

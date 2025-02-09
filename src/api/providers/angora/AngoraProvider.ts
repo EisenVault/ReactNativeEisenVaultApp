@@ -96,8 +96,8 @@ export class AngoraProvider implements DMSProvider {
      * The parent node ID can be null to fetch the root level items.
      *
      */
-    async getChildren(parentId: string): Promise<BrowseItem[]> {
-        return this.browseService.getChildren(parentId);
+    async getChildren(parent: BrowseItem): Promise<BrowseItem[]> {
+        return this.browseService.getChildren(parent);
     }
 
     /**

@@ -1,21 +1,18 @@
+export interface AngoraNode {
+    id: string;
+    raw_file_name: string;
+    materialize_path: string;
+    is_folder: boolean;
+    extension?: string;
+    size: number;
+    updated_at: string;
+    created_at: string;
+    created_by: string;
+    edited_by: string;
+    is_file: boolean;
+    is_department: boolean;
+}
+
 export interface AngoraNodesResponse {
-    data: {
-        id: string;
-        name: string;
-        path: string;
-        type: 'folder' | 'document';
-        mimeType?: string;
-        size?: number;
-        createdAt: string;
-        modifiedAt: string;
-        createdBy: {
-            id: string;
-            displayName: string;
-        };
-        modifiedBy: {
-            id: string;
-            displayName: string;
-        };
-        permissions: string[];
-    }[];
+    data: AngoraNode[];
 }

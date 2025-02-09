@@ -9,42 +9,89 @@ import { AlfrescoNodesResponse } from '../types';
  */
  
 import { Logger } from '../../../../utils/Logger';
-
 export class MapperUtils {
     static mapAlfrescoBrowseItem(entry: AlfrescoNodesResponse['list']['entries'][0]['entry']): BrowseItem {
-        Logger.debug('Mapping Alfresco node to BrowseItem', {
+        Logger.debug('Starting to map Alfresco node', {
             dms: 'Alfresco',
             util: 'MapperUtils',
             method: 'mapAlfrescoBrowseItem',
-            data: { entry }
+            data: { nodeId: entry.id, nodeType: entry.nodeType, raw: entry }
         });
 
-        const browseItem: BrowseItem = {
+        const baseItem = {
             id: entry.id,
             name: entry.name,
             path: entry.path?.elements ? entry.path.elements.map(el => el.name).join('/') : '',
             isFolder: entry.isFolder,
-            mimeType: entry.content?.mimeType || 'application/octet-stream',  // Default mime type
+            isDepartment: false,  // Added isDepartment property
+            mimeType: entry.content?.mimeType || 'application/octet-stream',
             size: entry.content?.sizeInBytes || 0,
             lastModified: entry.modifiedAt,
             createdAt: entry.createdAt,
             createdBy: entry.createdByUser?.displayName || '',
             modifiedBy: entry.modifiedByUser?.displayName || '',
             allowableOperations: entry.allowableOperations || [],
-            type: entry.isFolder ? 'folder' : 'file',
-            data: entry
+            type: entry.isFolder ? 'folder' as const : 'file' as const
         };
 
-        Logger.debug('Successfully mapped Alfresco node', {
+        Logger.debug('Base item mapped', {
             dms: 'Alfresco',
             util: 'MapperUtils',
             method: 'mapAlfrescoBrowseItem',
-            data: { nodeId: entry.id, result: browseItem }
+            data: { baseItem }
         });
 
-        return browseItem;
-    }
+        const folderData: Folder = {
+            id: entry.id,
+            name: entry.name,
+            path: baseItem.path,
+            parentId: entry.properties?.['cm:parentId'] || '',
+            createdBy: baseItem.createdBy,
+            modifiedBy: baseItem.modifiedBy,
+            createdAt: entry.createdAt,
+            modifiedAt: entry.modifiedAt,
+            isDepartment: false,
+            isFolder: true,
+            mimeType: 'application/vnd.folder',
+            size: 0,
+            lastModified: entry.modifiedAt,
+            allowableOperations: entry.allowableOperations || [],
+            type: 'folder' as const,
+            data: null as any  // Will be set after creation
+        };
+        folderData.data = folderData;
 
+        const fileData: Document = {
+            id: entry.id,
+            name: entry.name,
+            path: baseItem.path,
+            mimeType: baseItem.mimeType,
+            size: baseItem.size,
+            lastModified: entry.modifiedAt,
+            createdBy: baseItem.createdBy,
+            modifiedBy: baseItem.modifiedBy,
+            isOfflineAvailable: false,
+            isDepartment: false,
+            isFolder: false,
+            modifiedAt: entry.modifiedAt,
+            createdAt: entry.createdAt,  // Added the missing property
+            allowableOperations: entry.allowableOperations || [],
+            type: 'file' as const,
+            data: null as any
+        };
+        fileData.data = fileData;
+
+        const result = { ...baseItem, data: entry.isFolder ? folderData : fileData };
+
+        Logger.debug('Final mapped item', {
+            dms: 'Alfresco',
+            util: 'MapperUtils',
+            method: 'mapAlfrescoBrowseItem',
+            data: { result }
+        });
+
+        return result;
+    }
     /**
      * Maps Alfresco document node to our Document interface
      * @param entry - Raw document data from Alfresco
@@ -69,7 +116,10 @@ export class MapperUtils {
                 isDepartment: false,
                 createdAt: entry.createdAt,
                 modifiedAt: entry.modifiedAt,
-                isFolder: false
+                isFolder: false,
+                allowableOperations: entry.allowableOperations || [],
+                type: 'file' as const,
+                data: entry
             };
         } catch (error: unknown) {  // Type the error as 'unknown'
             // Check if the error is an instance of Error before accessing its properties
@@ -95,15 +145,24 @@ export class MapperUtils {
             if (!entry) {
                 throw new Error('No entry provided for folder mapping');
             }
-            console.log('MapperUtils.mapAlfresco Folder -- Mapping folder:', entry);
-            console.log('MapperUtils.mapAlfresco Folder -- Mapping NodeID:', entry.entry.id);
             return {
                 id: entry.entry.id,
                 name: entry.entry.name,
                 path: entry.path?.name || '',
                 parentId: entry.entry.parentId,
                 createdBy: entry.entry.createdByUser?.displayName || '',
-                modifiedBy: entry.entry.modifiedByUser?.displayName || ''
+                modifiedBy: entry.entry.modifiedByUser?.displayName || '',
+                createdAt: entry.entry.createdAt,
+                modifiedAt: entry.entry.modifiedAt,
+                isDepartment: false,
+                isFolder: true,
+                mimeType: 'application/vnd.folder',
+                size: 0,
+                lastModified: entry.entry.modifiedAt,
+                allowableOperations: entry.entry.allowableOperations || [],
+                type: 'folder' as const,
+                data: entry.entry
+
             };
         } catch (error: unknown) {  // Type the error as 'unknown'
             // Check if the error is an instance of Error before accessing its properties
@@ -254,19 +313,26 @@ static mapDepartments(entries: any[]): Department[] {
 
 
 static mapDepartment(entry: any): Department {
-    console.log('mapDepartment - before mapping - ', { entry });
     const dept = {
         id: entry.entry.guid,
         name: entry.entry.title,
         path: `/sites/${entry.entry.id}`,
         isDepartment: true,
         createdBy: entry.entry.visibility,
+        isFolder: true,
+        mimeType: 'application/vnd.folder',
+        size: 0,
+        lastModified: entry.entry.modifiedAt || new Date().toISOString(),
+        modifiedBy: entry.entry.visibility,
+        createdAt: entry.entry.createdAt || new Date().toISOString(),
+        modifiedAt: entry.entry.modifiedAt || new Date().toISOString(),
+        allowableOperations: [],
+        type: 'department' as const,
+        data: null as any
     };
-    console.log('mapDepartment - after mapping - ', { dept });
-
+    dept.data = dept;
     return dept;
 }
-
 }
 
 

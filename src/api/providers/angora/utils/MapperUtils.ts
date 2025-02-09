@@ -13,9 +13,7 @@ export class MapperUtils {
      * @returns A Document object.
      */
     static mapAngoraDocument(entry: any): Document {
-        console.log('Mapping Angora document:', entry);
-        console.log('Entry ID:', entry.id);
-        return {
+        const document: Document = {
             id: entry.id,
             name: entry.name,
             path: entry.path || '',
@@ -27,8 +25,14 @@ export class MapperUtils {
             isOfflineAvailable: false,
             isDepartment: false,
             isFolder: false,
-            modifiedAt: entry.modified_at
+            modifiedAt: entry.modified_at,
+            createdAt: entry.created_at || new Date().toISOString(),
+            allowableOperations: entry.allowable_operations || [],
+            type: 'file' as const,
+            data: null as any
         };
+        document.data = document;
+        return document;
     }
 
     /**
@@ -46,14 +50,26 @@ export class MapperUtils {
      * @returns A Folder object.
      */
     static mapAngoraFolder(entry: any): Folder {
-        return {
+        const folder: Folder = {
             id: entry.id,
             name: entry.name,
             path: entry.path || '',
             parentId: entry.parent_id,
             createdBy: entry.created_by?.display_name || '',
-            modifiedBy: entry.modified_by?.display_name || ''
+            modifiedBy: entry.modified_by?.display_name || '',
+            createdAt: entry.created_at || new Date().toISOString(),
+            modifiedAt: entry.modified_at || new Date().toISOString(),
+            isDepartment: false,
+            isFolder: true,
+            mimeType: 'application/vnd.folder',
+            size: 0,
+            lastModified: entry.modified_at || new Date().toISOString(),
+            allowableOperations: entry.allowable_operations || [],
+            type: 'folder' as const,
+            data: null as any
         };
+        folder.data = folder;
+        return folder;
     }
 
     /**
@@ -84,34 +100,72 @@ export class MapperUtils {
         });
         return { documents, folders };
     }
-
     static mapAngoraBrowseItems(data: AngoraNodesResponse['data']): BrowseItem[] {
-        Logger.debug('Mapping Angora nodes to BrowseItems', {
+        Logger.debug('Mapping Angora nodes', {
             dms: 'Angora',
             util: 'MapperUtils',
             method: 'mapAngoraBrowseItems',
             data: { count: data.length }
         });
 
-        const browseItems = data.map(item => {
-            const browseItem: BrowseItem = {
+        return data.map(item => {
+            const baseItem = {
                 id: item.id,
-                name: item.name,
-                path: item.path,
-                isFolder: item.type === 'folder',
-                mimeType: item.mimeType,
-                size: item.size,
-                lastModified: item.modifiedAt,
-                createdAt: item.createdAt,
-                createdBy: item.createdBy.displayName,
-                modifiedBy: item.modifiedBy.displayName,
-                allowableOperations: item.permissions,
-                type: item.type === 'folder' ? 'folder' : 'file',
-                data: item
+                name: item.raw_file_name,
+                path: item.materialize_path || '',
+                isFolder: item.is_folder,
+                isDepartment: false,  // Added isDepartment property
+                mimeType: item.extension ? `application/${item.extension.slice(1)}` : 'application/octet-stream',
+                size: item.size || 0,
+                lastModified: item.updated_at,
+                createdAt: item.created_at,
+                createdBy: item.created_by || '',
+                modifiedBy: item.edited_by || '',
+                allowableOperations: [],
+                type: item.is_folder ? 'folder' as const : 'file' as const
             };
-            return browseItem;
-        });
 
-        return browseItems;
+            const folderData: Folder = {
+                id: item.id,
+                name: item.raw_file_name,
+                path: baseItem.path,
+                parentId: '',
+                createdBy: baseItem.createdBy,
+                modifiedBy: baseItem.modifiedBy,
+                createdAt: item.created_at,
+                modifiedAt: item.updated_at,
+                isDepartment: false,
+                isFolder: true,
+                mimeType: 'application/vnd.folder',
+                size: 0,
+                lastModified: item.updated_at,
+                allowableOperations: [],
+                type: 'folder' as const,
+                data: null as any
+            };
+            folderData.data = folderData;
+
+            const fileData: Document = {
+                id: item.id,
+                name: item.raw_file_name,
+                path: baseItem.path,
+                mimeType: baseItem.mimeType,
+                size: baseItem.size,
+                lastModified: item.updated_at,
+                createdBy: baseItem.createdBy,
+                modifiedBy: baseItem.modifiedBy,
+                isOfflineAvailable: false,
+                isDepartment: false,
+                isFolder: false,
+                modifiedAt: item.updated_at,
+                createdAt: item.created_at,
+                allowableOperations: [],
+                type: 'file' as const,
+                data: null as any
+            };
+            fileData.data = fileData;
+
+            return { ...baseItem, data: item.is_folder ? folderData : fileData };
+        });
     }
 }

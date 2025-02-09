@@ -88,7 +88,7 @@ export class DocumentService extends BaseService {
             });
 
             const response = await this.makeCustomRequest<AngoraDocumentsResponse>(
-                `api/nodes/${folderId}/children?${params}`,
+                `nodes/${folderId}/children?${params}`,
                 {
                     headers: {
                         'x-portal': DocumentService.SERVICE_HEADERS.PORTAL,
@@ -136,7 +136,7 @@ export class DocumentService extends BaseService {
             });
 
             const response = await this.makeCustomRequest<AngoraDocumentResponse>(
-                `api/nodes/${documentId}`,
+                `nodes/${documentId}`,
                 {
                     headers: {
                         'x-portal': DocumentService.SERVICE_HEADERS.PORTAL,
@@ -191,7 +191,7 @@ export class DocumentService extends BaseService {
             const fileId = `${folderId}_${file.name}_${file.size}_${Date.now()}`;
 
             const response = await this.makeCustomRequest<AngoraUploadResponse>(
-                'api/uploads',
+                'uploads',
                 {
                     method: 'POST',
                     body: formData,
@@ -235,7 +235,7 @@ export class DocumentService extends BaseService {
             await this.getDocument(documentId);
 
             // Use the inherited buildUrl method from BaseService
-            const url = this.buildUrl(`api/files/${documentId}/download`);
+            const url = this.buildUrl(`files/${documentId}/download`);
 
             // Make request and get response
             const response = await fetch(url, {
@@ -274,7 +274,7 @@ export class DocumentService extends BaseService {
             this.logOperation('deleteDocument', { documentId });
 
             await this.makeCustomRequest(
-                `api/files/${documentId}`,
+                `files/${documentId}`,
                 {
                     method: 'DELETE',
                     headers: {
@@ -318,7 +318,7 @@ export class DocumentService extends BaseService {
             this.logOperation('getDocumentMetadata', { documentId });
 
             const response = await this.makeCustomRequest<{ data: Record<string, any> }>(
-                `api/files/${documentId}/metadata`,
+                `files/${documentId}/metadata`,
                 {
                     headers: {
                         'x-portal': DocumentService.SERVICE_HEADERS.PORTAL,

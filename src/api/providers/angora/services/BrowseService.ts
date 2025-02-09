@@ -3,7 +3,6 @@ import { ApiUtils } from '../utils/ApiUtils';
 import { Logger } from '../../../../utils/Logger';
 import { BrowseItem } from '../../../types';
 import { MapperUtils } from '../utils/MapperUtils';
-import { ENDPOINTS } from '../constants';
 import { AngoraNodesResponse } from '../types';
 
 export class BrowseService extends BaseService {
@@ -16,22 +15,30 @@ export class BrowseService extends BaseService {
         super(baseUrl, apiUtils);
     }
 
-    async getChildren(parentId: string): Promise<BrowseItem[]> {
+    async getChildren(parent:BrowseItem): Promise<BrowseItem[]> {
         try {
             Logger.info('Fetching children', {
                 dms: 'Angora',
                 service: 'BrowseService',
                 method: 'getChildren',
-                data: { parentId }
+                data: { parent }
             });
 
             const params = new URLSearchParams({
                 action: 'default'
             });
 
-            const path = parentId ? 
-                `${ENDPOINTS.DEPARTMENTS}/${parentId}/${ENDPOINTS.CHILDREN}` :
-                ENDPOINTS.DEPARTMENTS;
+        // Use different endpoints based on whether we're fetching department or folder contents
+              const path = parent.isDepartment
+            ? `departments/${parent.id}/children`
+            : `folders/${parent.id}/children`;
+
+                Logger.info('Path for Fetching children', {
+                    dms: 'Angora',
+                    service: 'BrowseService',
+                    method: 'getChildren',
+                    data: path
+                });
 
             const response = await this.makeCustomRequest<AngoraNodesResponse>(
                 `${path}?${params}`,
@@ -61,7 +68,7 @@ export class BrowseService extends BaseService {
                 dms: 'Angora',
                 service: 'BrowseService',
                 method: 'getChildren',
-                data: { parentId }
+                data: { parent }
             }, error instanceof Error ? error : undefined);
             throw this.createError('Failed to get children', error);
         }

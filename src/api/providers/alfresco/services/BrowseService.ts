@@ -11,16 +11,16 @@ export class BrowseService extends BaseService {
         super(baseUrl, apiUtils);
     }
 
-    async getChildren(parentId: string): Promise<BrowseItem[]> {
+    async getChildren(parent: BrowseItem): Promise<BrowseItem[]> {
         try {
             Logger.info('Fetching children', {
                 dms: 'Alfresco',
                 service: 'BrowseService',
                 method: 'getChildren',
-                data: { parentId }
+                data: { parent }
             });
 
-            const nodeId = parentId === 'root' ? '-root-' : parentId;
+            const nodeId = parent.id === 'root' ? '-root-' : parent.id;
             Logger.debug('Using nodeId for fetch', {
                 dms: 'Alfresco',
                 service: 'BrowseService',
@@ -54,7 +54,7 @@ export class BrowseService extends BaseService {
                 dms: 'Alfresco',
                 service: 'BrowseService',
                 method: 'getChildren',
-                data: { parentId }
+                data: { parent }
             }, error as Error);
             throw this.createError('Failed to get children', error);
         }
