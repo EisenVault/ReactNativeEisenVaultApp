@@ -24,6 +24,7 @@ interface AngoraDocumentResponse {
         modified_by?: {
             display_name?: string;
         };
+        download_link: string;
     };
 }
 
@@ -243,7 +244,8 @@ export class DocumentService extends BaseService {
                     ...this.getHeaders(),
                     'x-portal': DocumentService.SERVICE_HEADERS.PORTAL,
                     'x-service-name': DocumentService.SERVICE_HEADERS.SERVICE_NAME,
-                    'Accept': '*/*'
+                    'Accept': '*/*',
+                    'Accept-Language': 'en'  // Explicitly set to 'en'
                 }
             });
 
@@ -348,4 +350,21 @@ export class DocumentService extends BaseService {
             'Authorization': this.apiUtils.getToken() || '',
         };
     }
+
+
+async getDocumentContent(documentId: string): Promise<string> {
+    try {
+        const response = await this.makeCustomRequest<AngoraDocumentResponse>(
+            `files/${documentId}/content`,
+            {
+                method: 'GET',
+                serviceName: 'service-file'
+            }
+        );
+        return response.data.download_link;
+    } catch (error) {
+        this.logError('getDocumentContent failed', error);
+        throw this.createError('Failed to get document content', error);
+    }
+}
 }

@@ -396,4 +396,41 @@ async searchDocuments(query: string): Promise<Document[]> {
             }, error as Error);
             throw this.createError('Failed to delete folder', error);
         }
-    }}
+    }
+
+async getDocumentContent(documentId: string): Promise<string> {
+    try {
+        const response = await fetch(
+            this.buildUrl(`/api/-default-/public/alfresco/versions/1/nodes/${documentId}/content`),
+            {
+                headers: this.getHeaders(),
+                method: 'GET'
+            }
+        );
+        
+        const blob = await response.blob();
+        
+        // Convert blob to base64
+        const reader = new FileReader();
+        return new Promise((resolve, reject) => {
+            reader.onload = () => {
+                const base64 = reader.result?.toString().split(',')[1];
+                resolve(base64 || '');
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        this.logError('getDocumentContent failed', error);
+        throw this.createError('Failed to get document content', error);
+    }
+}
+
+private getHeaders(): HeadersInit {
+    return {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${this.apiUtils.getToken()}`
+    };
+}
+}

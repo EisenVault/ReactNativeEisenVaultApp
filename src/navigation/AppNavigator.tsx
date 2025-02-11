@@ -6,6 +6,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
+import { RootStackParamList } from '../api';
+import DocumentViewer from '../components/DocumentViewer';
+
 import { View, StyleSheet, Platform } from 'react-native';
 import { 
     Folder, 
@@ -14,6 +17,7 @@ import {
     User
 } from 'lucide-react-native'; // Make sure to install lucide-react-native
 
+
 // Import screens
 import BrowseScreen from '../components/screens/BrowseScreen';
 import SearchScreen from '../components/screens/SearchScreen';
@@ -21,7 +25,7 @@ import SettingsScreen from '../components/screens/SettingsScreen';
 
 // Define navigator types
 const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 /**
  * Primary colors used throughout the navigation
@@ -58,6 +62,13 @@ const BrowseStack = () => {
                     headerShadowVisible: false,
                 }}
             />
+                <Stack.Screen 
+                    name="DocumentViewer" 
+                    component={DocumentViewer}
+                    options={({ route }) => ({
+                        title: route.params.name
+                    })}
+    />
         </Stack.Navigator>
     );
 };

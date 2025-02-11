@@ -145,7 +145,9 @@ export class AlfrescoProvider implements DMSProvider {
     async searchDocuments(query: string): Promise<Document[]> {
         return this.documentService.searchDocuments(query);
     }
-
+    async getDocumentContent(documentId: string): Promise<string> {
+        return this.documentService.getDocumentContent(documentId);
+    }
 
 
     /**

@@ -278,6 +278,10 @@ export class AngoraProvider implements DMSProvider {
         //     throw new Error('File type not supported');
         // }
     }
-}
 
-export default AngoraProvider;
+
+
+    async getDocumentContent(documentId: string): Promise<string> {
+        return this.documentService.getDocumentContent(documentId);
+    }
+}

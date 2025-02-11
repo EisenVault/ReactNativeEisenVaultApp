@@ -93,6 +93,7 @@ export interface DMSProvider {
   uploadDocument(folderId: string, file: File): Promise<Document>;
   deleteDocument(documentId: string): Promise<void>;
   downloadDocument(documentId: string): Promise<Blob>;
+  getDocumentContent(documentId: string): Promise<string>;
   
   // Folder Operations
   getFolders(parentId: string, filters?: { nodeType?: string }): Promise<Folder[]>;
@@ -185,4 +186,17 @@ export interface Department extends BrowseItem {
   editedBy?: string;
   rawFileName?: string;
   
+}
+
+export type RootStackParamList = {
+    Login: undefined;
+    Browse: undefined;
+    DocumentViewer: {
+        documentId: string;
+        name: string;
+        mimeType: string;
+    };
+};
+export interface PDFViewerProps {
+  uri: string;
 }
