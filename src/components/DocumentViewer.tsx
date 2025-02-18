@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { Document } from '../api/types';
 import { DocumentViewerService } from '../services/DocumentViewerService';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
 import { DMSFactory } from '../api/factory';
 import { Logger } from '../utils/Logger';
-import PDFViewer from './PDFViewer';
-import ImageViewer from 'react-native-image-zoom-viewer';
-import FileViewer from 'react-native-file-viewer';
+import { ImageViewer, FileViewer } from './viewers/index';
 import theme from '../theme/theme';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../api/types';
+import getPDFViewer from './PDFViewer';
 
 
 type DocumentViewerScreenProps = {
@@ -22,6 +21,7 @@ const DocumentViewer: React.FC<DocumentViewerScreenProps> = ({ route }) => {
     const { documentId, name, mimeType } = route.params;
     const [documentUri, setDocumentUri] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [PDFViewer, setPDFViewer] = useState<React.ComponentType<any> | null>(null);
     const { serverUrl, authToken, providerType } = useSelector((state: RootState) => state.auth);
 
     const document: Document = {
@@ -55,6 +55,15 @@ const DocumentViewer: React.FC<DocumentViewerScreenProps> = ({ route }) => {
         loadDocument();
     }, [document]);
 
+    useEffect(() => {
+        const loadPDFViewer = async () => {
+          const PDFViewerComponent = await getPDFViewer();
+          setPDFViewer(PDFViewerComponent);
+        };
+    
+        loadPDFViewer();
+      }, []);
+
     const loadDocument = async () => {
         try {
             if (!providerType || !serverUrl || !authToken) {
@@ -83,7 +92,11 @@ const DocumentViewer: React.FC<DocumentViewerScreenProps> = ({ route }) => {
 
         switch (true) {
             case document.mimeType === 'application/pdf':
-                return <PDFViewer uri={documentUri} />;
+                if (PDFViewer) {
+                    return <PDFViewer uri={documentUri} />;
+                } else {
+                    return <ActivityIndicator />;
+                }
             
             case document.mimeType.startsWith('image/'):
                 return (
@@ -95,7 +108,6 @@ const DocumentViewer: React.FC<DocumentViewerScreenProps> = ({ route }) => {
                 );
             
             default:
-                // For other document types, use FileViewer
                 FileViewer.open(documentUri, {
                     showOpenWithDialog: true,
                     displayName: document.name,

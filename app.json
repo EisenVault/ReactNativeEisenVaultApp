@@ -17,7 +17,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.ReactNativeEisenVaultApp",
+      "bundleIdentifier": "com.eisenvault.ReactNativeEisenVaultApp",
       "icon": "./assets/ios/AppIcon.appiconset/iTunesArtwork@2x.png",
       "newArchEnabled": true
     },
@@ -27,10 +27,15 @@
         "backgroundColor": "#FFFFFF",
         "newArchEnabled": true
       },
-      "package": "com.anonymous.ReactNativeEisenVaultApp"
+      "package": "com.eisenvault.ReactNativeEisenVaultApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "254199b4-1eb1-4b5c-bf77-16cd9d3123b0"
+      }
     }
   }
 }

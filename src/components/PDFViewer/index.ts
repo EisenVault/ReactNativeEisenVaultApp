@@ -1,6 +1,13 @@
 import { Platform } from 'react-native';
 
-export default Platform.select({
-    web: require('./WebPDFViewer').default,
-    default: require('./NativePDFViewer').default,
-});
+async function getPDFViewer() {
+    if (Platform.OS === 'web') {
+        const { default: WebPDFViewer } = await import('./WebPDFViewer');
+        return WebPDFViewer;
+    } else {
+        //const { default: NativePDFViewer } = await import('./NativePDFViewer');
+        //return NativePDFViewer;
+    }
+}
+
+export default getPDFViewer;
