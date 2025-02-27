@@ -430,7 +430,7 @@ private getHeaders(): HeadersInit {
     return {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${this.apiUtils.getToken()}`
+        'Authorization': `${this.apiUtils.getToken()}`
     };
 }
 }
